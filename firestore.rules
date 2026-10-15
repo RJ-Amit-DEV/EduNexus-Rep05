@@ -92,9 +92,11 @@ service cloud.firestore {
       allow create: if isSuperUser() ||
         (teacherOwnsClass(request.resource.data.classCode));
 
-      allow update, delete: if isSuperUser() ||
+      allow update: if isSuperUser() ||
         (teacherOwnsClass(resource.data.classCode) &&
          request.resource.data.classCode == resource.data.classCode);
+
+      allow delete: if isSuperUser() || teacherOwnsClass(resource.data.classCode);
     }
 
     // Global Institutional Notice Board
