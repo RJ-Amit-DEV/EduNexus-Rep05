@@ -360,21 +360,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         {/* Dynamic Quick Student Indicators */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
-            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sem SGPI</p>
+            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">CGPA</p>
             <p className="text-lg font-bold font-mono text-slate-900 dark:text-white mt-0.5">
-              {academicRecord?.sem4 || '9.45'}
+              {academicRecord?.cgpa ?? academicRecord?.sem4 ?? '—'}
             </p>
           </div>
           <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
             <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Attendance</p>
             <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
-              {academicRecord?.attendance ? `${academicRecord.attendance}%` : '94%'}
+              {academicRecord?.attendance != null ? `${academicRecord.attendance}%` : '—'}
             </p>
           </div>
           <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
             <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">IA-1 Score</p>
             <p className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400 mt-0.5">
-              {academicRecord?.ia1 ?? 19}/20
+              {academicRecord?.ia1 != null ? `${academicRecord.ia1}/20` : '—'}
             </p>
           </div>
         </div>
@@ -390,7 +390,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">Class Enrollment & Identity</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-semibold font-mono">
-                Class: {profileData?.classCode || academicRecord?.classCode || 'CLS-4921'}
+                Class: {profileData?.classCode || academicRecord?.classCode || 'Not assigned'}
               </span>
             </div>
 
@@ -398,11 +398,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               {/* Student ID badge */}
               <div className="flex items-center gap-2 bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-700">
                 <span className="text-xs text-slate-400">Student ID:</span>
-                <span className="font-mono font-bold text-white text-sm">{profileData?.studentId || academicRecord?.studentId || 'STU-4042'}</span>
+                <span className="font-mono font-bold text-white text-sm">{profileData?.studentId || academicRecord?.studentId || 'Not linked'}</span>
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(profileData?.studentId || academicRecord?.studentId || 'STU-4042');
+                    navigator.clipboard.writeText(profileData?.studentId || academicRecord?.studentId || '');
                     setCopiedKey('student');
                     setTimeout(() => setCopiedKey(null), 2000);
                   }}
@@ -417,11 +417,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               <div className="flex items-center gap-2 bg-emerald-950/50 px-3 py-1.5 rounded-xl border border-emerald-500/40">
                 <KeyRound size={14} className="text-emerald-400" />
                 <span className="text-xs text-emerald-200">Parent Access ID:</span>
-                <span className="font-mono font-bold text-emerald-300 text-sm">{profileData?.parentId || academicRecord?.parentId || 'PAR-4042'}</span>
+                <span className="font-mono font-bold text-emerald-300 text-sm">{profileData?.parentId || academicRecord?.parentId || 'Not linked'}</span>
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(profileData?.parentId || academicRecord?.parentId || 'PAR-4042');
+                    navigator.clipboard.writeText(profileData?.parentId || academicRecord?.parentId || '');
                     setCopiedKey('parent');
                     setTimeout(() => setCopiedKey(null), 2000);
                   }}
@@ -434,7 +434,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </div>
 
             <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-              Share your <strong>Parent Access ID ({profileData?.parentId || academicRecord?.parentId || 'PAR-4042'})</strong> with your parents or guardians. They use this ID to sign in to the Parent Portal and view your academic progress reports.
+              Share your <strong>Parent Access ID ({profileData?.parentId || academicRecord?.parentId || 'Not linked'})</strong> with your parents or guardians. They use this ID to sign in to the Parent Portal and view your academic progress reports.
             </p>
           </div>
         </div>
