@@ -39,7 +39,17 @@ export const VisionBoard: React.FC<VisionBoardProps> = ({ isOpen, onClose }) => 
 
       try {
         const docRef = doc(db, 'users', currentUser.uid, 'content', 'visionBoard');
-        const docSnap = await getDoc(docRef);
+        // Avoid leaving the modal on an endless spinner if Firestore cannot respond.
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('VISION_BOARD_LOAD_TIMEOUT')), 12000);
+        });
+        let docSnap;
+        try {
+          docSnap = await Promise.race([getDoc(docRef), timeout]);
+        } finally {
+          if (timeoutId) clearTimeout(timeoutId);
+        }
         if (!cancelled && docSnap.exists()) {
           const data = docSnap.data();
           setGoals({
@@ -52,7 +62,11 @@ export const VisionBoard: React.FC<VisionBoardProps> = ({ isOpen, onClose }) => 
         }
       } catch (error) {
         console.error('Error fetching vision board:', error);
-        if (!cancelled) setErrorMessage('Could not load saved goals. Check your connection and permissions, then try saving again.');
+        if (!cancelled) {
+          setErrorMessage(error instanceof Error && error.message === 'VISION_BOARD_LOAD_TIMEOUT'
+            ? 'Loading is taking too long. Check your internet connection and Firebase/Firestore setup, then close and reopen My Academic Goals.'
+            : 'Could not load saved goals. Check your connection and Firestore permissions, then try again.');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
