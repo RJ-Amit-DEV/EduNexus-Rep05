@@ -107,6 +107,7 @@ const AppContent: React.FC = () => {
   });
 
   const [childAcademicRecord, setChildAcademicRecord] = useState<any>(null);
+  const [studentAcademicRecord, setStudentAcademicRecord] = useState<any>(null);
   const [childConsistency, setChildConsistency] = useState<ConsistencyData | null>(null);
 
   useEffect(() => {
@@ -229,7 +230,6 @@ const AppContent: React.FC = () => {
   }, [isLoggedIn, role, profileData.parentId, profileData.childStudentId, profileData.childName]);
 
   // Handle Student's Academic Record Sync (from Teacher's List)
-  const [studentAcademicRecord, setStudentAcademicRecord] = useState<any>(null);
   useEffect(() => {
     if (!isLoggedIn || role !== 'student') {
       return;
