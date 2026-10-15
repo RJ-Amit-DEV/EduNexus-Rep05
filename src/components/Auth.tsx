@@ -83,7 +83,7 @@ export const Auth: React.FC<AuthProps> = ({
   const [teacherClassCode, setTeacherClassCode] = useState(DEFAULT_TEACHER_CLASS_CODE);
 
   // Parent Form State
-  const [parentAccessId, setParentAccessId] = useState('PAR-4042');
+  const [parentAccessId, setParentAccessId] = useState('');
   const [parentName, setParentName] = useState('Rajesh Sharma');
 
   const [isIpAddressHost, setIsIpAddressHost] = useState(false);
@@ -110,7 +110,7 @@ export const Auth: React.FC<AuthProps> = ({
     if (!studentClassCode.trim()) return;
     
     // Auto generate Student ID and Paired Parent ID
-    const studentId = generateStudentId(4042);
+    const studentId = generateStudentId();
     const parentId = generateParentId(studentId);
 
     onLogin('student', {
@@ -956,13 +956,7 @@ export const Auth: React.FC<AuthProps> = ({
                           <span>Student's Parent Access ID</span>
                           <span className="text-[10px] text-emerald-400 font-bold">(Key)</span>
                         </label>
-                        <button
-                          type="button"
-                          onClick={() => setParentAccessId('PAR-4042')}
-                          className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer"
-                        >
-                          Fill Demo (PAR-4042)
-                        </button>
+
                       </div>
 
                       <input 
@@ -974,7 +968,7 @@ export const Auth: React.FC<AuthProps> = ({
                         required
                       />
                       <p className="text-[11px] text-slate-400 mt-1.5">
-                        Generated automatically when your child joins the teacher's class. Links directly to their report card.
+                        Enter the exact Parent Access ID shown in your child's student dashboard. The code must match one unique student record.
                       </p>
                     </div>
 

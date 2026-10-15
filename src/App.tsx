@@ -33,8 +33,7 @@ import { handleFirestoreError, OperationType } from './lib/firestore-errors';
 import { 
   DEFAULT_TEACHER_CLASS_CODE, 
   generateStudentId, 
-  generateParentId, 
-  deriveStudentIdFromParentId 
+  generateParentId 
 } from './lib/id-generator';
 import { collection, onSnapshot, query, where, orderBy, limit, doc, getDoc, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { 
@@ -107,6 +106,7 @@ const AppContent: React.FC = () => {
   });
 
   const [childAcademicRecord, setChildAcademicRecord] = useState<any>(null);
+  const [studentAcademicRecord, setStudentAcademicRecord] = useState<any>(null);
   const [childConsistency, setChildConsistency] = useState<ConsistencyData | null>(null);
 
   useEffect(() => {
@@ -189,51 +189,48 @@ const AppContent: React.FC = () => {
       return;
     }
 
-    const targetParentId = profileData.parentId || 'PAR-4042';
-    const targetStudentId = profileData.childStudentId || deriveStudentIdFromParentId(targetParentId);
+    const targetParentId = profileData.parentId?.trim().toUpperCase();
+    if (!targetParentId) {
+      setChildAcademicRecord(null);
+      return;
+    }
 
-    // 1. Check local student cache first for instant synchronous data
+    // The explicitly labelled demo account uses its paired demo record, not production cache rows.
+    if (profileData.uid.startsWith('demo-')) return;
+
+    // Portal-code mode may use the local cache, but only an exact Parent Access ID match is valid.
     try {
       const localStr = localStorage.getItem('eduplan_local_students');
       if (localStr) {
         const list: Student[] = JSON.parse(localStr);
-        const match = list.find(s => 
-          s.parentId === targetParentId || 
-          s.studentId === targetStudentId || 
-          s.studentId === targetParentId.replace('PAR-', 'STU-') ||
-          (profileData.childName && s.name.toLowerCase() === profileData.childName.toLowerCase())
-        );
-        if (match) {
-          setChildAcademicRecord(match);
+        const matches = list.filter(s => s.parentId?.trim().toUpperCase() === targetParentId);
+        if (matches.length === 1) setChildAcademicRecord(matches[0]);
+        else {
+          setChildAcademicRecord(null);
+          if (matches.length > 1) console.error(`Duplicate Parent Access ID detected in local cache: ${targetParentId}`);
         }
       }
-    } catch (e) {}
+    } catch {
+      setChildAcademicRecord(null);
+    }
 
-    // 2. Listen to Firestore students collection
+    // Portal-code sessions resolve only from their exact local record. Do not query Firestore
+    // using a possibly unrelated Firebase session.
+    if (!auth.currentUser || profileData.uid.startsWith('parent-')) return;
+
+    // Firestore is authoritative. Never substitute another child or invented grades.
     const studentsQuery = query(collection(db, 'students'), where('parentId', '==', targetParentId), limit(1));
     const unsubscribeChildStudent = onSnapshot(studentsQuery, (snapshot) => {
-      if (!snapshot.empty) {
-        const studentData = snapshot.docs[0].data();
-        setChildAcademicRecord({
-          id: snapshot.docs[0].id,
-          name: studentData.name,
-          rollNo: studentData.rollNo,
-          studentId: studentData.studentId,
-          parentId: studentData.parentId,
-          classCode: studentData.classCode || DEFAULT_TEACHER_CLASS_CODE,
-          sem4: studentData.sem4 || "9.24",
-          ia1: studentData.ia1 ?? 19,
-          ia2: studentData.ia2 ?? 18,
-          attendance: studentData.attendance ?? 92,
-          quizPass: studentData.quizPass ?? 88,
-          batch: studentData.batch || "INFTT-1",
-          college: studentData.college || "Institute of Engineering & Technology",
-          course: studentData.course || "B.E. Information Technology",
-          semester: studentData.semester || "Semester IV"
-        });
+      if (snapshot.empty) {
+        setChildAcademicRecord(null);
+        return;
       }
+      const studentData = snapshot.docs[0].data();
+      setChildAcademicRecord({ id: snapshot.docs[0].id, ...studentData });
     }, (error) => {
-      console.warn("Child student sync note:", error);
+      console.warn("Child student sync failed:", error);
+      // Do not leave stale data visible after a failed lookup.
+      setChildAcademicRecord(null);
     });
 
     return () => {
@@ -242,43 +239,49 @@ const AppContent: React.FC = () => {
   }, [isLoggedIn, role, profileData.parentId, profileData.childStudentId, profileData.childName]);
 
   // Handle Student's Academic Record Sync (from Teacher's List)
-  const [studentAcademicRecord, setStudentAcademicRecord] = useState<any>(null);
   useEffect(() => {
     if (!isLoggedIn || role !== 'student') {
       return;
     }
 
-    const currentStudentId = profileData.studentId || 'STU-4042';
-    const currentRoll = profileData.rollNo || 'INFTT-1-042';
+    const currentStudentId = profileData.studentId?.trim().toUpperCase();
+    if (!currentStudentId) {
+      setStudentAcademicRecord(null);
+      return;
+    }
 
-    // 1. Check local student cache
+    // The explicitly labelled demo account uses its paired demo record, not production cache rows.
+    if (profileData.uid.startsWith('demo-')) return;
+
+    // Match by the stable student ID only; names and roll numbers are not identity keys.
     try {
       const localStr = localStorage.getItem('eduplan_local_students');
       if (localStr) {
         const list: Student[] = JSON.parse(localStr);
-        const match = list.find(s => 
-          s.studentId === currentStudentId || 
-          s.rollNo === currentRoll ||
-          (profileData.name && s.name.toLowerCase() === profileData.name.toLowerCase())
-        );
-        if (match) {
-          setStudentAcademicRecord(match);
+        const matches = list.filter(s => s.studentId?.trim().toUpperCase() === currentStudentId);
+        if (matches.length === 1) setStudentAcademicRecord(matches[0]);
+        else {
+          setStudentAcademicRecord(null);
+          if (matches.length > 1) console.error(`Duplicate Student ID detected in local cache: ${currentStudentId}`);
         }
       }
-    } catch (e) {}
+    } catch {
+      setStudentAcademicRecord(null);
+    }
 
-    // 2. Query Firestore by rollNo
-    const q = query(collection(db, 'students'), where('rollNo', '==', currentRoll), limit(1));
+    // Portal-code/demo sessions use the exact local cache; don't query with an unrelated auth session.
+    if (!auth.currentUser || profileData.uid.startsWith('student-')) return;
+
+    const q = query(collection(db, 'students'), where('studentId', '==', currentStudentId), limit(1));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        setStudentAcademicRecord(snapshot.docs[0].data());
-      }
+      setStudentAcademicRecord(snapshot.empty ? null : { id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
     }, (error) => {
-      console.warn("Student academic record sync note:", error);
+      console.warn("Student academic record sync failed:", error);
+      setStudentAcademicRecord(null);
     });
 
     return () => unsubscribe();
-  }, [isLoggedIn, role, profileData.studentId, profileData.rollNo, profileData.name]);
+  }, [isLoggedIn, role, profileData.studentId]);
 
   // Shared State for Notices and Doubt Solver
   const [notices, setNotices] = useState<Notice[]>(DEFAULT_NOTICES);
@@ -339,31 +342,22 @@ const AppContent: React.FC = () => {
               setIsLoggedIn(true);
               setShowRoleSelection(false);
               setIsLoading(false);
-              if (parsed.role === 'parent') {
+              // Restore only the explicitly labelled demo fixtures. Real portal sessions resolve by exact IDs.
+              setChildAcademicRecord(null);
+              setStudentAcademicRecord(null);
+              if (parsed.uid === 'demo-parent-01') {
                 setChildAcademicRecord({
-                  rollNo: "INFTT-1-042",
-                  name: "Aarav Sharma",
-                  sem4: "9.24",
-                  ia1: 19,
-                  ia2: 18,
-                  attendance: 92,
-                  quizPass: 88,
-                  batch: "INFTT-1",
-                  college: "Institute of Engineering & Technology",
-                  course: "B.E. Information Technology"
+                  rollNo: 'INFTT-1-042', studentId: 'STU-4042', parentId: 'PAR-4042',
+                  name: 'Aarav Sharma', sem4: '9.24', ia1: 19, ia2: 18, attendance: 92,
+                  quizPass: 88, batch: 'INFTT-1', college: 'Institute of Engineering & Technology',
+                  course: 'B.E. Information Technology'
                 });
-              } else if (parsed.role === 'student') {
+              } else if (parsed.uid === 'demo-student-01') {
                 setStudentAcademicRecord({
-                  rollNo: "INFTT-1-042",
-                  name: "Aarav Sharma",
-                  sem4: "9.24",
-                  ia1: 19,
-                  ia2: 18,
-                  attendance: 92,
-                  quizPass: 88,
-                  batch: "INFTT-1",
-                  college: "Institute of Engineering & Technology",
-                  course: "B.E. Information Technology"
+                  rollNo: 'INFTT-1-042', studentId: 'STU-4042', parentId: 'PAR-4042',
+                  name: 'Aarav Sharma', sem4: '9.24', ia1: 19, ia2: 18, attendance: 92,
+                  quizPass: 88, batch: 'INFTT-1', college: 'Institute of Engineering & Technology',
+                  course: 'B.E. Information Technology'
                 });
               }
               return;
@@ -534,52 +528,44 @@ const AppContent: React.FC = () => {
   const handleSwitchParentId = async (inputKey: string) => {
     const cleanKey = inputKey.trim().toUpperCase();
     if (!cleanKey) return;
-    const derivedStudentId = deriveStudentIdFromParentId(cleanKey);
+    let matches: Student[] = [];
 
-    let match: Student | null = null;
-
-    // Check local student cache first
+    // A parent code must match exactly one record. Never match by name or derived ID.
     try {
       const localStr = localStorage.getItem('eduplan_local_students');
       if (localStr) {
         const list: Student[] = JSON.parse(localStr);
-        match = list.find(s => 
-          s.parentId === cleanKey || 
-          s.studentId === cleanKey || 
-          s.studentId === derivedStudentId ||
-          s.parentId === `PAR-${cleanKey.replace(/[^0-9]/g, '')}`
-        ) || null;
+        matches = list.filter(s => s.parentId?.trim().toUpperCase() === cleanKey);
       }
     } catch (e) {}
 
-    // Check Firestore
-    if (!match) {
+    if (matches.length > 1) {
+      setChildAcademicRecord(null);
+      alert(`Parent Access ID ${cleanKey} is duplicated in the local student cache. The records need to be deduplicated before this code can safely identify a child.`);
+      return;
+    }
+
+    let match: Student | null = matches[0] || null;
+
+    // Query Firestore only for an authenticated account; local portal sessions use local data only.
+    if (!match && auth.currentUser && !profileData.uid.startsWith('parent-') && !profileData.uid.startsWith('demo-')) {
       try {
-        const snap = await getDocs(query(collection(db, 'students'), where('parentId', '==', cleanKey), limit(1)));
-        if (!snap.empty) {
-          match = snap.docs[0].data() as Student;
+        const snap = await getDocs(query(collection(db, 'students'), where('parentId', '==', cleanKey)));
+        if (snap.size > 1) {
+          setChildAcademicRecord(null);
+          alert(`Parent Access ID ${cleanKey} matches multiple Firestore records. Please resolve duplicate IDs before viewing this report.`);
+          return;
         }
-      } catch (e) {}
+        if (!snap.empty) match = { id: snap.docs[0].id, ...snap.docs[0].data() } as Student;
+      } catch (e) {
+        console.warn('Could not verify Parent Access ID against Firestore:', e);
+      }
     }
 
     if (!match) {
-      const seedNum = parseInt(cleanKey.replace(/[^0-9]/g, '')) || 4042;
-      match = {
-        id: `student-${seedNum}`,
-        studentId: `STU-${seedNum}`,
-        parentId: cleanKey.startsWith('PAR-') ? cleanKey : `PAR-${seedNum}`,
-        classCode: DEFAULT_TEACHER_CLASS_CODE,
-        rollNo: `INFTT-1-${(seedNum % 120 + 1).toString().padStart(3, '0')}`,
-        name: seedNum === 4042 ? "Aarav Sharma" : `Student ${seedNum}`,
-        sem4: "9.24",
-        ia1: 19,
-        ia2: 18,
-        attendance: 92,
-        quizPass: 88,
-        batch: "INFTT-1",
-        college: "Institute of Engineering & Technology",
-        course: "B.E. Information Technology"
-      };
+      setChildAcademicRecord(null);
+      alert(`No student record found for Parent Access ID ${cleanKey}. Verify the code; no sample data was substituted.`);
+      return;
     }
 
     setChildAcademicRecord(match);
@@ -633,7 +619,7 @@ const AppContent: React.FC = () => {
           const sName = payload.name || 'Aarav Sharma';
           const sRoll = payload.rollNo || 'INFTT-1-042';
           const sClass = payload.classCode || DEFAULT_TEACHER_CLASS_CODE;
-          const sId = payload.studentId || generateStudentId(4042);
+          const sId = payload.studentId || generateStudentId();
           const pId = payload.parentId || generateParentId(sId);
 
           const studentRecord: Student = {
@@ -703,48 +689,40 @@ const AppContent: React.FC = () => {
         if (selectedRole === 'parent') {
           const pName = payload.name || 'Parent Guardian';
           const pId = payload.parentId || 'PAR-4042';
-          const derivedSId = payload.studentId || deriveStudentIdFromParentId(pId);
-
-          let matchedStudent: Student | null = null;
+          let matchedStudents: Student[] = [];
           try {
             const cachedStr = localStorage.getItem('eduplan_local_students');
             if (cachedStr) {
               const list: Student[] = JSON.parse(cachedStr);
-              matchedStudent = list.find(s => 
-                s.parentId === pId || 
-                s.studentId === derivedSId || 
-                s.studentId === pId.replace('PAR-', 'STU-')
-              ) || null;
+              matchedStudents = list.filter(s => s.parentId?.trim().toUpperCase() === pId);
             }
           } catch (e) {}
 
-          if (!matchedStudent) {
+          if (matchedStudents.length > 1) {
+            setAuthError(`Parent Access ID ${pId} is duplicated in local data. Please resolve duplicate IDs before viewing a report.`);
+            setChildAcademicRecord(null);
+            return;
+          }
+
+          let matchedStudent: Student | null = matchedStudents[0] || null;
+          if (!matchedStudent && auth.currentUser) {
             try {
-              const snap = await getDocs(query(collection(db, 'students'), where('parentId', '==', pId), limit(1)));
-              if (!snap.empty) {
-                matchedStudent = snap.docs[0].data() as Student;
+              const snap = await getDocs(query(collection(db, 'students'), where('parentId', '==', pId)));
+              if (snap.size > 1) {
+                setAuthError(`Parent Access ID ${pId} matches multiple student records. Please resolve duplicate IDs first.`);
+                setChildAcademicRecord(null);
+                return;
               }
-            } catch (e) {}
+              if (!snap.empty) matchedStudent = { id: snap.docs[0].id, ...snap.docs[0].data() } as Student;
+            } catch (e) {
+              console.warn('Could not verify parent code against Firestore:', e);
+            }
           }
 
           if (!matchedStudent) {
-            const seedNum = parseInt(pId.replace(/[^0-9]/g, '')) || 4042;
-            matchedStudent = {
-              id: `student-${seedNum}`,
-              studentId: `STU-${seedNum}`,
-              parentId: pId,
-              classCode: DEFAULT_TEACHER_CLASS_CODE,
-              rollNo: `INFTT-1-${(seedNum % 120 + 1).toString().padStart(3, '0')}`,
-              name: seedNum === 4042 ? "Aarav Sharma" : `Student ${seedNum}`,
-              sem4: "9.24",
-              ia1: 19,
-              ia2: 18,
-              attendance: 92,
-              quizPass: 88,
-              batch: "INFTT-1",
-              college: "Institute of Engineering & Technology",
-              course: "B.E. Information Technology"
-            };
+            setChildAcademicRecord(null);
+            setAuthError(`No student record is linked to Parent Access ID ${pId}. Check the code and try again; no sample report was loaded.`);
+            return;
           }
 
           const pProfile: ProfileData = {
@@ -794,6 +772,7 @@ const AppContent: React.FC = () => {
 
       const userDoc = await getDoc(doc(db, 'users', loggedInUser.uid));
       if (!userDoc.exists()) {
+        const initialStudentId = selectedRole === 'student' ? generateStudentId() : undefined;
         const initialProfile: ProfileData = {
           uid: loggedInUser.uid,
           name: loggedInUser.displayName || 'New User',
@@ -805,9 +784,8 @@ const AppContent: React.FC = () => {
           course: 'B.E. Information Technology',
           semester: 'Semester IV',
           classCode: selectedRole === 'teacher' ? DEFAULT_TEACHER_CLASS_CODE : undefined,
-          studentId: selectedRole === 'student' ? generateStudentId(4042) : undefined,
-          parentId: selectedRole === 'student' ? generateParentId(4042) : (selectedRole === 'parent' ? 'PAR-4042' : undefined),
-          childName: selectedRole === 'parent' ? 'Aarav Sharma' : undefined
+          studentId: initialStudentId,
+          parentId: initialStudentId ? generateParentId(initialStudentId) : undefined
         };
         await setDoc(doc(db, 'users', loggedInUser.uid), {
           ...initialProfile,
@@ -937,11 +915,15 @@ const AppContent: React.FC = () => {
         avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
         about: 'Parent of Aarav Sharma (INFT Semester 4).',
         childName: 'Aarav Sharma',
+        childStudentId: 'STU-4042',
+        parentId: 'PAR-4042',
         relationship: 'Mother',
         contact: '+91 98200 12345'
       };
       setChildAcademicRecord({
         rollNo: "INFTT-1-042",
+        studentId: "STU-4042",
+        parentId: "PAR-4042",
         name: "Aarav Sharma",
         sem4: "9.24",
         ia1: 19,
@@ -964,7 +946,9 @@ const AppContent: React.FC = () => {
         college: 'Institute of Engineering & Technology',
         course: 'B.E. Information Technology',
         semester: 'Semester 4',
-        rollNo: 'INFTT-1-042'
+        rollNo: 'INFTT-1-042',
+        studentId: 'STU-4042',
+        parentId: 'PAR-4042'
       };
       setStudentAcademicRecord({
         rollNo: "INFTT-1-042",

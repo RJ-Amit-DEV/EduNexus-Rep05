@@ -60,7 +60,7 @@ import { cn } from '../lib/utils';
 import * as XLSX from 'xlsx';
 import { db, auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, query, orderBy, updateDoc, doc, setDoc, getDocs, addDoc, deleteDoc, serverTimestamp, writeBatch, limit, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, updateDoc, doc, setDoc, addDoc, deleteDoc, serverTimestamp, where } from 'firebase/firestore';
 import { ConsistencyData, Student } from '../types';
 import { Notice } from './NoticeBoard';
 import { DEFAULT_TEACHER_CLASS_CODE, generateStudentId, generateParentId } from '../lib/id-generator';
@@ -84,12 +84,12 @@ const generateInitialStudents = (): Student[] => {
       parentId: `PAR-${studentNum}`,
       classCode: DEFAULT_TEACHER_CLASS_CODE,
       rollNo: `INFTT-1-${i.toString().padStart(3, '0')}`,
-      name: `${firstName} ${lastName}`,
-      sem4: (Math.random() * (10 - 6) + 6).toFixed(2),
-      ia1: Math.floor(Math.random() * 21),
-      ia2: Math.floor(Math.random() * 21),
-      attendance: Math.floor(Math.random() * 41) + 60, // 60-100%
-      quizPass: Math.floor(Math.random() * 31) + 70,   // 70-100%
+      name: i === 42 ? "Aarav Sharma" : `${firstName} ${lastName}`,
+      sem4: i === 42 ? "9.24" : (Math.random() * (10 - 6) + 6).toFixed(2),
+      ia1: i === 42 ? 19 : Math.floor(Math.random() * 21),
+      ia2: i === 42 ? 18 : Math.floor(Math.random() * 21),
+      attendance: i === 42 ? 92 : Math.floor(Math.random() * 41) + 60, // 60-100%
+      quizPass: i === 42 ? 88 : Math.floor(Math.random() * 31) + 70,
       batch: "INFTT-1",
       college: "Institute of Engineering & Technology",
       course: "B.E. Information Technology"
@@ -170,7 +170,25 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         const localCached = localStorage.getItem('eduplan_local_students');
         if (localCached) {
           try {
-            setStudents(JSON.parse(localCached));
+            const cachedStudents: Student[] = JSON.parse(localCached);
+            // Migrate the explicitly seeded demo row so PAR-4042 always identifies the advertised demo child.
+            const demoIndex = cachedStudents.findIndex(s => s.id === 'student-initial-42');
+            if (demoIndex >= 0) {
+              cachedStudents[demoIndex] = {
+                ...cachedStudents[demoIndex],
+                studentId: 'STU-4042',
+                parentId: 'PAR-4042',
+                rollNo: 'INFTT-1-042',
+                name: 'Aarav Sharma',
+                sem4: '9.24',
+                ia1: 19,
+                ia2: 18,
+                attendance: 92,
+                quizPass: 88
+              };
+              localStorage.setItem('eduplan_local_students', JSON.stringify(cachedStudents));
+            }
+            setStudents(cachedStudents);
           } catch {
             const initial = generateInitialStudents();
             setStudents(initial);
@@ -184,32 +202,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         return;
       }
 
-      const seedData = async () => {
-        const hasSeeded = localStorage.getItem('students_seeded');
-        if (hasSeeded) return;
-
-        try {
-          const snapshot = await getDocs(query(collection(db, 'students'), limit(1)));
-          if (snapshot.empty) {
-            localStorage.setItem('students_seeded', 'true');
-            const initialData = generateInitialStudents();
-            const batch = writeBatch(db);
-            initialData.forEach((s) => {
-              const newDocRef = doc(collection(db, 'students'));
-              batch.set(newDocRef, s);
-            });
-            await batch.commit();
-          } else {
-            localStorage.setItem('students_seeded', 'true');
-          }
-        } catch (err) {
-          console.error("Error seeding students:", err);
-        }
-      };
-
-      await seedData();
-
-      const q = query(collection(db, 'students'), orderBy('rollNo', 'asc'));
+      // Scope the teacher roster to the active teacher's class; do not seed fake records into production.
+      const q = query(collection(db, 'students'), where('classCode', '==', classCode));
       unsubscribeStudents = onSnapshot(q, (snapshot) => {
         const seenIds = new Set<string>();
         const studentData: Student[] = [];
@@ -223,6 +217,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             id: uniqueId
           } as Student);
         });
+        studentData.sort((a, b) => String(a.rollNo || '').localeCompare(String(b.rollNo || '')));
         setStudents(studentData);
       }, (error) => {
         console.error("Firestore Error (students):", error);
@@ -238,9 +233,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     };
   }, []);
 
-  const filteredStudents = students.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    s.rollNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  const filteredStudents = students.filter(s => s.classCode === classCode).filter(s => 
+    (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (s.rollNo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.studentId && s.studentId.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (s.parentId && s.parentId.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -1484,8 +1479,8 @@ export const ParentDashboard: React.FC<{
     ? displayChild.name.split(' ')[0] 
     : "Your child";
 
-  const resolvedStudentId = displayChild.studentId || studentId || 'STU-4042';
-  const resolvedParentId = displayChild.parentId || parentId || 'PAR-4042';
+  const resolvedStudentId = displayChild.studentId || studentId || 'Not linked';
+  const resolvedParentId = displayChild.parentId || parentId || 'Not linked';
 
   return (
     <div className="p-6 md:p-8 space-y-6 max-w-[1400px] mx-auto font-sans">
@@ -1501,10 +1496,10 @@ export const ParentDashboard: React.FC<{
               </>
             )}
             <span>•</span>
-            <span className="text-indigo-600 dark:text-indigo-400 font-bold">Roll No: {displayChild.rollNo || 'INFTT-1-042'}</span>
+            <span className="text-indigo-600 dark:text-indigo-400 font-bold">Roll No: {displayChild.rollNo || 'Not available'}</span>
             <span>•</span>
             <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-              Class: {displayChild.classCode || 'CLS-4921'}
+              Class: {displayChild.classCode || 'Not available'}
             </span>
           </div>
 

@@ -69,10 +69,34 @@ service cloud.firestore {
       }
     }
 
-    // Students Collection (Teacher's Records & Class Continuous Assessment)
-    match /students/{studentId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+    function userProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function teacherOwnsClass(classCode) {
+      return isAuthenticated() &&
+             userProfile().role == 'teacher' &&
+             userProfile().classCode == classCode;
+    }
+
+    // Student records are scoped to the linked parent, the student, or the student's teacher.
+    match /students/{studentDocId} {
+      allow read: if isSuperUser() || (
+        isAuthenticated() && (
+          (userProfile().role == 'teacher' && resource.data.classCode == userProfile().classCode) ||
+          (userProfile().role == 'parent' && resource.data.parentId == userProfile().parentId) ||
+          (userProfile().role == 'student' && resource.data.studentId == userProfile().studentId)
+        )
+      );
+
+      allow create: if isSuperUser() ||
+        (teacherOwnsClass(request.resource.data.classCode));
+
+      allow update: if isSuperUser() ||
+        (teacherOwnsClass(resource.data.classCode) &&
+         request.resource.data.classCode == resource.data.classCode);
+
+      allow delete: if isSuperUser() || teacherOwnsClass(resource.data.classCode);
     }
 
     // Global Institutional Notice Board
