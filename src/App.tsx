@@ -721,6 +721,8 @@ const AppContent: React.FC = () => {
           return;
         }
 
+      }
+
       // 2. Google Sign-In Fallback if no payload passed
       let loggedInUser = auth.currentUser;
       if (!loggedInUser) {
