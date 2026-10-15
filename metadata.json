@@ -1,0 +1,6 @@
+{
+  "name": "EduNexus",
+  "description": "An AI-powered unified educational ecosystem connecting students, teachers, and parents with adaptive AI study scheduling, classroom management, real-time parent tracking, and interactive learning tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

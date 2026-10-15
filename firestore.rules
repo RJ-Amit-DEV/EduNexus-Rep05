@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isSuperUser() {
+      return isAuthenticated() && 
+             (request.auth.token.email in [
+               "amitjadhav4306@gmail.com",
+               "guptakunal4575@gmail.com",
+               "krishnagosavi880@gmail.com",
+               "rushabhhirave@gmail.com"
+             ]);
+    }
+
+    // GLOBAL SUPERUSER FULL ACCESS
+    match /{document=**} {
+      allow read, write: if isSuperUser();
+    }
+
+    // User Profiles
+    match /users/{userId} {
+      // Authenticated institutional users can view profiles (for directory, doubt solver, mentor lookup)
+      allow read: if isAuthenticated();
+      
+      // Users can manage their own profile; Superusers have full admin access
+      allow create, update: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+      allow delete: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+
+      // User Deadlines Subcollection
+      match /deadlines/{deadlineId} {
+        allow read, write: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+      }
+
+      // Quiz Results Subcollection
+      match /quiz_results/{resultId} {
+        allow read, write: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+      }
+
+      // AI Schedules Subcollection
+      match /schedules/{scheduleId} {
+        allow read, write: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+      }
+
+      // Smart Notes Subcollection
+      match /notes/{noteId} {
+        allow read, write: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+      }
+
+      // Scheduler Chat Messages Subcollection
+      match /scheduler_messages/{messageId} {
+        allow read, write: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+      }
+
+      // Any other user sub-tab collection
+      match /{subTab}/{docId} {
+        allow read, write: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+      }
+    }
+
+    // Students Collection (Teacher's Records & Class Continuous Assessment)
+    match /students/{studentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Global Institutional Notice Board
+    match /notices/{noticeId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Global Doubt Solver Discussions
+    match /messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated();
+    }
+  }
+}

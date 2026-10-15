@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user profile information across different roles.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "name": { "type": "string", "description": "Full name of the user" },
+        "email": { "type": "string", "format": "email", "description": "Email address" },
+        "role": { "type": "string", "enum": ["student", "teacher", "parent"], "description": "User role" },
+        "avatar": { "type": "string", "description": "URL to the user's avatar" },
+        "about": { "type": "string", "description": "Brief bio or about section" },
+        "college": { "type": "string", "description": "College or institution name (Student/Teacher)" },
+        "course": { "type": "string", "description": "Course or branch name (Student)" },
+        "semester": { "type": "string", "description": "Current semester (Student)" },
+        "rollNo": { "type": "string", "description": "University Roll Number (Student)" },
+        "department": { "type": "string", "description": "Department name (Teacher)" },
+        "designation": { "type": "string", "description": "Professional designation (Teacher)" },
+        "experience": { "type": "string", "description": "Years of experience (Teacher)" },
+        "childName": { "type": "string", "description": "Name of the child (Parent)" },
+        "relationship": { "type": "string", "description": "Relationship to the student (Parent)" },
+        "contact": { "type": "string", "description": "Contact number (Parent)" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "Deadline": {
+      "title": "Deadline",
+      "description": "A student's custom or critical deadline.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique deadline ID" },
+        "title": { "type": "string", "description": "Title of the deadline" },
+        "date": { "type": "string", "description": "Date of the deadline (YYYY-MM-DD)" },
+        "time": { "type": "string", "description": "Time of the deadline (HH:MM)" },
+        "color": { "type": "string", "description": "Hex or tailwind color code" },
+        "completed": { "type": "boolean", "description": "Whether the deadline is met" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["title", "date", "time", "color", "completed"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Information about a student in a class.",
+      "type": "object",
+      "properties": {
+        "rollNo": { "type": "string", "description": "Roll number" },
+        "name": { "type": "string", "description": "Full name" },
+        "sem4": { "type": "string", "description": "Semester 4 pointer" },
+        "ia1": { "type": "number", "description": "IA1 marks" },
+        "ia2": { "type": "number", "description": "IA2 marks" }
+      },
+      "required": ["rollNo", "name", "sem4", "ia1", "ia2"]
+    },
+    "QuizResult": {
+      "title": "Quiz Result",
+      "description": "A record of a student's performance on a specific quiz.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique result ID" },
+        "subject": { "type": "string", "description": "Subject name" },
+        "score": { "type": "number", "description": "Score achieved" },
+        "total": { "type": "number", "description": "Maximum possible score" },
+        "date": { "type": "string", "format": "date-time", "description": "Date of the quiz" },
+        "type": { "type": "string", "enum": ["quiz", "ia1", "ia2", "assignment"], "description": "Type of assessment" }
+      },
+      "required": ["subject", "score", "total", "date", "type"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "User profile documents indexed by Auth UID."
+    },
+    "/users/{uid}/deadlines/{deadlineId}": {
+      "schema": "Deadline",
+      "description": "Sub-collection of deadlines for a specific student."
+    },
+    "/users/{uid}/quiz_results/{resultId}": {
+      "schema": "QuizResult",
+      "description": "Sub-collection of quiz results for a specific student."
+    },
+    "/users/{uid}/schedules/{scheduleId}": {
+      "schema": "object",
+      "description": "Sub-collection of AI-generated study schedules."
+    },
+    "/users/{uid}/notes/{noteId}": {
+      "schema": "object",
+      "description": "Sub-collection of AI-generated study notes."
+    },
+    "/users/{uid}/scheduler_messages/{messageId}": {
+      "schema": "object",
+      "description": "Sub-collection of AI-driven scheduler chat history."
+    },
+    "/notices/{noticeId}": {
+      "schema": "object",
+      "description": "Global notice board collection."
+    },
+    "/messages/{messageId}": {
+      "schema": "object",
+      "description": "Global doubt solver chat messages."
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Collection of students in the class."
+    }
+  }
+}
