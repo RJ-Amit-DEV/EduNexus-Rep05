@@ -184,32 +184,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         return;
       }
 
-      const seedData = async () => {
-        const hasSeeded = localStorage.getItem('students_seeded');
-        if (hasSeeded) return;
-
-        try {
-          const snapshot = await getDocs(query(collection(db, 'students'), limit(1)));
-          if (snapshot.empty) {
-            localStorage.setItem('students_seeded', 'true');
-            const initialData = generateInitialStudents();
-            const batch = writeBatch(db);
-            initialData.forEach((s) => {
-              const newDocRef = doc(collection(db, 'students'));
-              batch.set(newDocRef, s);
-            });
-            await batch.commit();
-          } else {
-            localStorage.setItem('students_seeded', 'true');
-          }
-        } catch (err) {
-          console.error("Error seeding students:", err);
-        }
-      };
-
-      await seedData();
-
-      const q = query(collection(db, 'students'), orderBy('rollNo', 'asc'));
+      // Scope the teacher roster to the active teacher's class; do not seed fake records into production.
+      const q = query(collection(db, 'students'), where('classCode', '==', classCode));
       unsubscribeStudents = onSnapshot(q, (snapshot) => {
         const seenIds = new Set<string>();
         const studentData: Student[] = [];
@@ -223,6 +199,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             id: uniqueId
           } as Student);
         });
+        studentData.sort((a, b) => String(a.rollNo || '').localeCompare(String(b.rollNo || '')));
         setStudents(studentData);
       }, (error) => {
         console.error("Firestore Error (students):", error);
@@ -238,9 +215,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     };
   }, []);
 
-  const filteredStudents = students.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    s.rollNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  const filteredStudents = students.filter(s => s.classCode === classCode).filter(s => 
+    (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (s.rollNo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.studentId && s.studentId.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (s.parentId && s.parentId.toLowerCase().includes(searchTerm.toLowerCase()))
   );
