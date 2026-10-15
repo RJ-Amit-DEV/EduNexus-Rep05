@@ -3,6 +3,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
+import { GoogleGenAI } from "@google/genai";
+import firebaseConfig from "./firebase-applet-config.json";
 
 dotenv.config();
 
@@ -14,6 +16,50 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+
+  // Authenticated Smart AI Scheduler proxy. Gemini credentials stay server-side.
+  app.post("/api/generate-content", async (req, res) => {
+    const authorization = req.headers.authorization;
+    const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+      ? authorization.slice(7)
+      : "";
+    if (!token) return res.status(401).json({ error: "Sign in to use Smart AI Scheduler." });
+
+    try {
+      const identityResponse = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${firebaseConfig.apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken: token })
+        }
+      );
+      if (!identityResponse.ok) {
+        return res.status(401).json({ error: "Your session is invalid or expired. Please sign in again." });
+      }
+
+      const { contents, config } = req.body ?? {};
+      if (!Array.isArray(contents) || !config || typeof config !== "object") {
+        return res.status(400).json({ error: "Invalid AI request." });
+      }
+      if (JSON.stringify(req.body).length > 120_000) {
+        return res.status(413).json({ error: "Request is too large. Shorten the syllabus and try again." });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) return res.status(503).json({ error: "Smart AI Scheduler is not configured on the server." });
+      const ai = new GoogleGenAI({ apiKey });
+      const result = await ai.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents,
+        config
+      });
+      return res.json({ text: result.text || "" });
+    } catch (error) {
+      console.error("Scheduler AI request failed:", error);
+      return res.status(500).json({ error: "AI generation failed. Please retry in a moment." });
+    }
+  });
 
   // YouTube Search API Proxy
   app.get("/api/youtube-search", async (req, res) => {
