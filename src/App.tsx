@@ -324,33 +324,9 @@ const AppContent: React.FC = () => {
               setIsLoggedIn(true);
               setShowRoleSelection(false);
               setIsLoading(false);
-              if (parsed.role === 'parent') {
-                setChildAcademicRecord({
-                  rollNo: "INFTT-1-042",
-                  name: "Aarav Sharma",
-                  sem4: "9.24",
-                  ia1: 19,
-                  ia2: 18,
-                  attendance: 92,
-                  quizPass: 88,
-                  batch: "INFTT-1",
-                  college: "Institute of Engineering & Technology",
-                  course: "B.E. Information Technology"
-                });
-              } else if (parsed.role === 'student') {
-                setStudentAcademicRecord({
-                  rollNo: "INFTT-1-042",
-                  name: "Aarav Sharma",
-                  sem4: "9.24",
-                  ia1: 19,
-                  ia2: 18,
-                  attendance: 92,
-                  quizPass: 88,
-                  batch: "INFTT-1",
-                  college: "Institute of Engineering & Technology",
-                  course: "B.E. Information Technology"
-                });
-              }
+              // Role-specific sync effects resolve records by exact IDs; never inject a default child's grades.
+              setChildAcademicRecord(null);
+              setStudentAcademicRecord(null);
               return;
             }
           } catch (e) {
@@ -751,6 +727,7 @@ const AppContent: React.FC = () => {
 
       const userDoc = await getDoc(doc(db, 'users', loggedInUser.uid));
       if (!userDoc.exists()) {
+        const initialStudentId = selectedRole === 'student' ? generateStudentId() : undefined;
         const initialProfile: ProfileData = {
           uid: loggedInUser.uid,
           name: loggedInUser.displayName || 'New User',
@@ -762,8 +739,8 @@ const AppContent: React.FC = () => {
           course: 'B.E. Information Technology',
           semester: 'Semester IV',
           classCode: selectedRole === 'teacher' ? DEFAULT_TEACHER_CLASS_CODE : undefined,
-          studentId: selectedRole === 'student' ? generateStudentId() : undefined,
-          parentId: selectedRole === 'student' ? undefined : undefined
+          studentId: initialStudentId,
+          parentId: initialStudentId ? generateParentId(initialStudentId) : undefined
         };
         await setDoc(doc(db, 'users', loggedInUser.uid), {
           ...initialProfile,
