@@ -44,6 +44,41 @@ import {
   User
 } from 'firebase/auth';
 
+const getDemoStudentRecord = (): Student | null => {
+  try {
+    const cached = localStorage.getItem('eduplan_local_students');
+    if (cached) {
+      const students: Student[] = JSON.parse(cached);
+      const matches = students.filter(student =>
+        student.studentId?.trim().toUpperCase() === 'STU-4042' ||
+        student.parentId?.trim().toUpperCase() === 'PAR-4042'
+      );
+      if (matches.length === 1) return matches[0];
+      if (matches.length > 1) {
+        console.error('Demo student IDs are duplicated; refusing to display ambiguous academic data.');
+      }
+      return null;
+    }
+  } catch (error) {
+    console.warn('Unable to read the local demo student record:', error);
+  }
+
+  return {
+    rollNo: 'INFTT-1-042',
+    studentId: 'STU-4042',
+    parentId: 'PAR-4042',
+    name: 'Aarav Sharma',
+    sem4: '9.24',
+    ia1: 19,
+    ia2: 18,
+    attendance: 92,
+    quizPass: 88,
+    batch: 'INFTT-1',
+    college: 'Institute of Engineering & Technology',
+    course: 'B.E. Information Technology'
+  } as Student;
+};
+
 const ModuleLoadingFallback: React.FC<{ label?: string }> = ({ label = 'Loading Module...' }) => (
   <div className="flex-1 min-h-[60vh] flex flex-col items-center justify-center p-8">
     <div className="relative">
@@ -216,12 +251,15 @@ const AppContent: React.FC = () => {
 
     // Portal-code sessions resolve only from their exact local record. Do not query Firestore
     // using a possibly unrelated Firebase session.
-    if (!auth.currentUser || profileData.uid.startsWith('parent-')) return;
+    if (!auth.currentUser || profileData.uid.startsWith('parent-') || profileData.uid.startsWith('demo-')) return;
 
     // Firestore is authoritative. Never substitute another child or invented grades.
-    const studentsQuery = query(collection(db, 'students'), where('parentId', '==', targetParentId), limit(1));
+    const studentsQuery = query(collection(db, 'students'), where('parentId', '==', targetParentId));
     const unsubscribeChildStudent = onSnapshot(studentsQuery, (snapshot) => {
-      if (snapshot.empty) {
+      if (snapshot.size !== 1) {
+        if (snapshot.size > 1) {
+          console.error(`Parent Access ID ${targetParentId} matches multiple Firestore student records.`);
+        }
         setChildAcademicRecord(null);
         return;
       }
@@ -272,9 +310,10 @@ const AppContent: React.FC = () => {
     // Portal-code/demo sessions use the exact local cache; don't query with an unrelated auth session.
     if (!auth.currentUser || profileData.uid.startsWith('student-')) return;
 
-    const q = query(collection(db, 'students'), where('studentId', '==', currentStudentId), limit(1));
+    const q = query(collection(db, 'students'), where('studentId', '==', currentStudentId));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setStudentAcademicRecord(snapshot.empty ? null : { id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
+      setStudentAcademicRecord(snapshot.size === 1 ? { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } : null);
+      if (snapshot.size > 1) console.error(`Student ID ${currentStudentId} matches multiple Firestore records.`);
     }, (error) => {
       console.warn("Student academic record sync failed:", error);
       setStudentAcademicRecord(null);
@@ -346,19 +385,9 @@ const AppContent: React.FC = () => {
               setChildAcademicRecord(null);
               setStudentAcademicRecord(null);
               if (parsed.uid === 'demo-parent-01') {
-                setChildAcademicRecord({
-                  rollNo: 'INFTT-1-042', studentId: 'STU-4042', parentId: 'PAR-4042',
-                  name: 'Aarav Sharma', sem4: '9.24', ia1: 19, ia2: 18, attendance: 92,
-                  quizPass: 88, batch: 'INFTT-1', college: 'Institute of Engineering & Technology',
-                  course: 'B.E. Information Technology'
-                });
+                setChildAcademicRecord(getDemoStudentRecord());
               } else if (parsed.uid === 'demo-student-01') {
-                setStudentAcademicRecord({
-                  rollNo: 'INFTT-1-042', studentId: 'STU-4042', parentId: 'PAR-4042',
-                  name: 'Aarav Sharma', sem4: '9.24', ia1: 19, ia2: 18, attendance: 92,
-                  quizPass: 88, batch: 'INFTT-1', college: 'Institute of Engineering & Technology',
-                  course: 'B.E. Information Technology'
-                });
+                setStudentAcademicRecord(getDemoStudentRecord());
               }
               return;
             }
@@ -629,11 +658,11 @@ const AppContent: React.FC = () => {
             classCode: sClass,
             rollNo: sRoll,
             name: sName,
-            sem4: "9.24",
-            ia1: 19,
-            ia2: 18,
-            attendance: 92,
-            quizPass: 88,
+            sem4: "",
+            ia1: 0,
+            ia2: 0,
+            attendance: 0,
+            quizPass: 0,
             batch: "INFTT-1",
             college: "Institute of Engineering & Technology",
             course: "B.E. Information Technology"
@@ -920,20 +949,7 @@ const AppContent: React.FC = () => {
         relationship: 'Mother',
         contact: '+91 98200 12345'
       };
-      setChildAcademicRecord({
-        rollNo: "INFTT-1-042",
-        studentId: "STU-4042",
-        parentId: "PAR-4042",
-        name: "Aarav Sharma",
-        sem4: "9.24",
-        ia1: 19,
-        ia2: 18,
-        attendance: 92,
-        quizPass: 88,
-        batch: "INFTT-1",
-        college: "Institute of Engineering & Technology",
-        course: "B.E. Information Technology"
-      });
+      setChildAcademicRecord(getDemoStudentRecord());
       setActiveTab('performance');
     } else {
       demoProfile = {
@@ -950,18 +966,7 @@ const AppContent: React.FC = () => {
         studentId: 'STU-4042',
         parentId: 'PAR-4042'
       };
-      setStudentAcademicRecord({
-        rollNo: "INFTT-1-042",
-        name: "Aarav Sharma",
-        sem4: "9.24",
-        ia1: 19,
-        ia2: 18,
-        attendance: 92,
-        quizPass: 88,
-        batch: "INFTT-1",
-        college: "Institute of Engineering & Technology",
-        course: "B.E. Information Technology"
-      });
+      setStudentAcademicRecord(getDemoStudentRecord());
       setActiveTab('dashboard');
     }
 

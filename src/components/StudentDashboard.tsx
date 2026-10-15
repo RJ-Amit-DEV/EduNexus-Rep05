@@ -360,15 +360,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         {/* Dynamic Quick Student Indicators */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
-            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sem SGPI</p>
+            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">CGPA</p>
             <p className="text-lg font-bold font-mono text-slate-900 dark:text-white mt-0.5">
-              {academicRecord?.sem4 || '9.45'}
+              {academicRecord?.sem4 || '—'}
             </p>
           </div>
           <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
             <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Attendance</p>
             <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
-              {academicRecord?.attendance ? `${academicRecord.attendance}%` : '94%'}
+              {typeof academicRecord?.attendance === 'number' ? `${academicRecord.attendance}%` : '—'}
             </p>
           </div>
           <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
