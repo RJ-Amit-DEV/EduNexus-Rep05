@@ -195,7 +195,10 @@ const AppContent: React.FC = () => {
       return;
     }
 
-    // Demo mode may use the local cache, but only an exact Parent Access ID match is valid.
+    // The explicitly labelled demo account uses its paired demo record, not production cache rows.
+    if (profileData.uid.startsWith('demo-')) return;
+
+    // Portal-code mode may use the local cache, but only an exact Parent Access ID match is valid.
     try {
       const localStr = localStorage.getItem('eduplan_local_students');
       if (localStr) {
@@ -211,9 +214,9 @@ const AppContent: React.FC = () => {
       setChildAcademicRecord(null);
     }
 
-    // Portal-code/demo sessions resolve only from their exact local record. Do not query Firestore
+    // Portal-code sessions resolve only from their exact local record. Do not query Firestore
     // using a possibly unrelated Firebase session.
-    if (!auth.currentUser || profileData.uid.startsWith('parent-') || profileData.uid.startsWith('demo-')) return;
+    if (!auth.currentUser || profileData.uid.startsWith('parent-')) return;
 
     // Firestore is authoritative. Never substitute another child or invented grades.
     const studentsQuery = query(collection(db, 'students'), where('parentId', '==', targetParentId), limit(1));
@@ -247,6 +250,9 @@ const AppContent: React.FC = () => {
       return;
     }
 
+    // The explicitly labelled demo account uses its paired demo record, not production cache rows.
+    if (profileData.uid.startsWith('demo-')) return;
+
     // Match by the stable student ID only; names and roll numbers are not identity keys.
     try {
       const localStr = localStorage.getItem('eduplan_local_students');
@@ -264,7 +270,7 @@ const AppContent: React.FC = () => {
     }
 
     // Portal-code/demo sessions use the exact local cache; don't query with an unrelated auth session.
-    if (!auth.currentUser || profileData.uid.startsWith('student-') || profileData.uid.startsWith('demo-')) return;
+    if (!auth.currentUser || profileData.uid.startsWith('student-')) return;
 
     const q = query(collection(db, 'students'), where('studentId', '==', currentStudentId), limit(1));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -894,11 +900,15 @@ const AppContent: React.FC = () => {
         avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
         about: 'Parent of Aarav Sharma (INFT Semester 4).',
         childName: 'Aarav Sharma',
+        childStudentId: 'STU-4042',
+        parentId: 'PAR-4042',
         relationship: 'Mother',
         contact: '+91 98200 12345'
       };
       setChildAcademicRecord({
         rollNo: "INFTT-1-042",
+        studentId: "STU-4042",
+        parentId: "PAR-4042",
         name: "Aarav Sharma",
         sem4: "9.24",
         ia1: 19,
@@ -921,7 +931,9 @@ const AppContent: React.FC = () => {
         college: 'Institute of Engineering & Technology',
         course: 'B.E. Information Technology',
         semester: 'Semester 4',
-        rollNo: 'INFTT-1-042'
+        rollNo: 'INFTT-1-042',
+        studentId: 'STU-4042',
+        parentId: 'PAR-4042'
       };
       setStudentAcademicRecord({
         rollNo: "INFTT-1-042",
