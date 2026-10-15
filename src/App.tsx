@@ -310,9 +310,10 @@ const AppContent: React.FC = () => {
     // Portal-code/demo sessions use the exact local cache; don't query with an unrelated auth session.
     if (!auth.currentUser || profileData.uid.startsWith('student-')) return;
 
-    const q = query(collection(db, 'students'), where('studentId', '==', currentStudentId), limit(1));
+    const q = query(collection(db, 'students'), where('studentId', '==', currentStudentId));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setStudentAcademicRecord(snapshot.empty ? null : { id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
+      setStudentAcademicRecord(snapshot.size === 1 ? { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } : null);
+      if (snapshot.size > 1) console.error(`Student ID ${currentStudentId} matches multiple Firestore records.`);
     }, (error) => {
       console.warn("Student academic record sync failed:", error);
       setStudentAcademicRecord(null);
@@ -657,11 +658,11 @@ const AppContent: React.FC = () => {
             classCode: sClass,
             rollNo: sRoll,
             name: sName,
-            sem4: "9.24",
-            ia1: 19,
-            ia2: 18,
-            attendance: 92,
-            quizPass: 88,
+            sem4: "",
+            ia1: 0,
+            ia2: 0,
+            attendance: 0,
+            quizPass: 0,
             batch: "INFTT-1",
             college: "Institute of Engineering & Technology",
             course: "B.E. Information Technology"
