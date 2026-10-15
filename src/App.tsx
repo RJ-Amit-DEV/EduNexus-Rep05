@@ -53,7 +53,7 @@ const getDemoStudentRecord = (): Student | null => {
         student.studentId?.trim().toUpperCase() === 'STU-4042' ||
         student.parentId?.trim().toUpperCase() === 'PAR-4042'
       );
-      if (matches.length === 1) return matches[0];
+      if (matches.length === 1) return { ...matches[0], cgpa: matches[0].cgpa ?? matches[0].sem4 ?? '' };
       if (matches.length > 1) {
         console.error('Demo student IDs are duplicated; refusing to display ambiguous academic data.');
       }
@@ -245,7 +245,7 @@ const AppContent: React.FC = () => {
         setChildAcademicRecord(null);
         return;
       }
-      setChildAcademicRecord({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Student);
+      setChildAcademicRecord({ id: snapshot.docs[0].id, ...snapshot.docs[0].data(), cgpa: snapshot.docs[0].data().cgpa ?? snapshot.docs[0].data().sem4 ?? '' } as Student);
     }, error => {
       console.error('Parent academic record access failed:', error);
       setChildAcademicRecord(null);
@@ -274,7 +274,7 @@ const AppContent: React.FC = () => {
       if (localStr) {
         const list: Student[] = JSON.parse(localStr);
         const matches = list.filter(s => s.studentId?.trim().toUpperCase() === currentStudentId);
-        if (matches.length === 1) setStudentAcademicRecord(matches[0]);
+        if (matches.length === 1) setStudentAcademicRecord({ ...matches[0], cgpa: matches[0].cgpa ?? matches[0].sem4 ?? '' });
         else {
           setStudentAcademicRecord(null);
           if (matches.length > 1) console.error(`Duplicate Student ID detected in local cache: ${currentStudentId}`);
@@ -289,7 +289,7 @@ const AppContent: React.FC = () => {
 
     const q = query(collection(db, 'students'), where('studentId', '==', currentStudentId));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setStudentAcademicRecord(snapshot.size === 1 ? { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } : null);
+      setStudentAcademicRecord(snapshot.size === 1 ? { id: snapshot.docs[0].id, ...snapshot.docs[0].data(), cgpa: snapshot.docs[0].data().cgpa ?? snapshot.docs[0].data().sem4 ?? '' } as Student : null);
       if (snapshot.size > 1) console.error(`Student ID ${currentStudentId} matches multiple Firestore records.`);
     }, (error) => {
       console.warn("Student academic record sync failed:", error);
@@ -703,7 +703,8 @@ const AppContent: React.FC = () => {
             return;
           }
 
-          const linkedStudent = { id: linkedSnapshot.docs[0].id, ...linkedSnapshot.docs[0].data() } as Student;
+          const linkedData = linkedSnapshot.docs[0].data();
+          const linkedStudent = { id: linkedSnapshot.docs[0].id, ...linkedData, cgpa: linkedData.cgpa ?? linkedData.sem4 ?? '' } as Student;
           const verifiedProfile: ProfileData = {
             ...trustedProfile,
             uid: signedInUser.uid,
