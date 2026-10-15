@@ -365,14 +365,17 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
     const q = query(
       collection(db, path),
       where('conversationId', '==', activeConversationId),
-      orderBy('createdAt', 'asc'),
       limit(200)
     );
     const unsubscribe = onSnapshot(q, snapshot => {
       const fetchedMessages = snapshot.docs.map(item => ({
         ...item.data(),
         id: item.id
-      } as Message));
+      } as Message)).sort((a, b) => {
+        const left = (a as any).createdAt?.toMillis?.() ?? 0;
+        const right = (b as any).createdAt?.toMillis?.() ?? 0;
+        return left - right;
+      });
       setMessages(fetchedMessages.length ? fetchedMessages : [WELCOME_MESSAGE(activeConversationId)]);
     }, error => {
       console.error('Unable to load scheduler conversation history:', error);
@@ -392,22 +395,13 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
         id: item.id
       } as ScheduleHistoryItem));
       setSchedulesHistory(history);
-      if (history.length > 0 && !activeScheduleId && messages.length <= 1) {
-        const latest = history[0];
-        setActiveConversationId(latest.conversationId || latest.id);
-        setCurrentSchedule(latest.schedule);
-        setSchedulingMode(latest.mode);
-        setTimeline(latest.timeline);
-        setTimelineInput(latest.timeline);
-        setExtractedSyllabus(latest.syllabus || '');
-        setActiveScheduleId(latest.id);
-      }
+
     }, error => {
       console.error('Unable to load scheduler plan history:', error);
       setSchedulesHistory([]);
     });
     return () => unsubscribe();
-  }, [authenticatedUid, activeScheduleId, messages.length]);
+  }, [authenticatedUid]);
 
   const deleteRefsInBatches = async (refs: any[]) => {
     for (let index = 0; index < refs.length; index += 450) {
