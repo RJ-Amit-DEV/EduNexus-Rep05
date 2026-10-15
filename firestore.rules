@@ -37,7 +37,12 @@ service cloud.firestore {
       // Parent-child and role bindings are institution-managed identity fields.
       // A user cannot create a parent account or edit their own role/link to another child.
       allow create: if isSuperUser() || (
-        isOwner(userId) && request.resource.data.get('role', null) != 'parent'
+        isOwner(userId) &&
+        request.resource.data.get('role', null) == 'student' &&
+        request.resource.data.get('studentId', null) == null &&
+        request.resource.data.get('parentId', null) == null &&
+        request.resource.data.get('childStudentId', null) == null &&
+        request.resource.data.get('classCode', null) == null
       );
       allow update: if isSuperUser() || (
         isOwner(userId) &&
