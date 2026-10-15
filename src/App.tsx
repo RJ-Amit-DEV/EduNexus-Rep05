@@ -56,8 +56,8 @@ const getDemoStudentRecord = (): Student | null => {
       if (matches.length === 1) return matches[0];
       if (matches.length > 1) {
         console.error('Demo student IDs are duplicated; refusing to display ambiguous academic data.');
-        return null;
       }
+      return null;
     }
   } catch (error) {
     console.warn('Unable to read the local demo student record:', error);
