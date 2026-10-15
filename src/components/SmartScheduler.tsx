@@ -35,6 +35,7 @@ import { VideoFocusPlayer } from './VideoFocusPlayer';
 import { db, auth } from '../firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, doc, getDocs, getDoc, writeBatch, limit, serverTimestamp, where, deleteDoc } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
+import { onAuthStateChanged } from 'firebase/auth';
 
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
@@ -100,6 +101,7 @@ const getGenAI = (): GoogleGenAI => {
 
 export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery = '' }) => {
   const [activeConversationId, setActiveConversationId] = useState<string>(Math.random().toString(36).substring(2, 15));
+  const [authenticatedUid, setAuthenticatedUid] = useState<string | null>(auth.currentUser?.uid ?? null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [schedulesHistory, setSchedulesHistory] = useState<ScheduleHistoryItem[]>([]);
   const [activeScheduleId, setActiveScheduleId] = useState<string | null>(null);
@@ -274,6 +276,7 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
           timeline: finalTimeline,
           mode: finalMode,
           schedule: data.schedule,
+          syllabus: extractedSyllabus.substring(0, 50000),
           syllabusPreview: extractedSyllabus ? extractedSyllabus.substring(0, 300) : '',
           syllabusLength: extractedSyllabus ? extractedSyllabus.length : 0,
           createdAt: serverTimestamp()
@@ -345,70 +348,67 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
     }
   }, [messages]);
 
-  // Fetch messages history for active conversation
-  useEffect(() => {
-    if (!auth.currentUser || !activeConversationId) return;
+  // Track auth changes explicitly; effects must resubscribe after sign-in/sign-out.
+  useEffect(() => onAuthStateChanged(auth, user => {
+    setAuthenticatedUid(user?.uid ?? null);
+    if (!user) {
+      setSchedulesHistory([]);
+      setActiveScheduleId(null);
+      setCurrentSchedule(null);
+      setMessages([WELCOME_MESSAGE(activeConversationId)]);
+    }
+  }), [activeConversationId]);
 
-    const path = `users/${auth.currentUser.uid}/scheduler_messages`;
-    // Avoid composite index by only ordering, then filtering client-side
+  // Fetch only this conversation's messages and only after auth is resolved.
+  useEffect(() => {
+    if (!authenticatedUid || !activeConversationId) return;
+    const path = `users/${authenticatedUid}/scheduler_messages`;
     const q = query(
-      collection(db, path), 
-      orderBy('createdAt', 'asc')
+      collection(db, path),
+      where('conversationId', '==', activeConversationId),
+      orderBy('createdAt', 'asc'),
+      limit(200)
     );
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedMessages = snapshot.docs
-        .map(doc => ({
-          ...doc.data(),
-          id: doc.id
-        } as Message))
-        .filter(msg => msg.conversationId === activeConversationId);
-      
-      if (fetchedMessages.length > 0) {
-        setMessages(fetchedMessages);
-      } else {
-        // If no messages in Firestore for this conversation, show the welcome message
-        setMessages([WELCOME_MESSAGE(activeConversationId)]);
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+    const unsubscribe = onSnapshot(q, snapshot => {
+      const fetchedMessages = snapshot.docs.map(item => ({
+        ...item.data(),
+        id: item.id
+      } as Message));
+      setMessages(fetchedMessages.length ? fetchedMessages : [WELCOME_MESSAGE(activeConversationId)]);
+    }, error => {
+      console.error('Unable to load scheduler conversation history:', error);
+      setMessages([WELCOME_MESSAGE(activeConversationId)]);
     });
-
     return () => unsubscribe();
-  }, [activeConversationId]);
+  }, [authenticatedUid, activeConversationId]);
 
-  // Fetch schedules history
+  // Load the signed-in user's schedule history, with a bounded result set.
   useEffect(() => {
-    if (!auth.currentUser) return;
-
-    const path = `users/${auth.currentUser.uid}/schedules`;
-    const q = query(collection(db, path), orderBy('createdAt', 'desc'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const history = snapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id
-      })) as ScheduleHistoryItem[];
+    if (!authenticatedUid) return;
+    const path = `users/${authenticatedUid}/schedules`;
+    const q = query(collection(db, path), orderBy('createdAt', 'desc'), limit(100));
+    const unsubscribe = onSnapshot(q, snapshot => {
+      const history = snapshot.docs.map(item => ({
+        ...item.data(),
+        id: item.id
+      } as ScheduleHistoryItem));
       setSchedulesHistory(history);
-      
-      // If no active conversation and history exists, load the latest
-      if (history.length > 0 && !activeScheduleId) {
+      if (history.length > 0 && !activeScheduleId && messages.length <= 1) {
         const latest = history[0];
-        // Only set if we don't have a real conversation going
-        if (messages.length <= 1) {
-          setActiveConversationId(latest.conversationId || latest.id);
-          setCurrentSchedule(latest.schedule);
-          setSchedulingMode(latest.mode);
-          setTimeline(latest.timeline);
-          setActiveScheduleId(latest.id);
-        }
+        setActiveConversationId(latest.conversationId || latest.id);
+        setCurrentSchedule(latest.schedule);
+        setSchedulingMode(latest.mode);
+        setTimeline(latest.timeline);
+        setTimelineInput(latest.timeline);
+        setExtractedSyllabus(latest.syllabus || '');
+        setActiveScheduleId(latest.id);
       }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+    }, error => {
+      console.error('Unable to load scheduler plan history:', error);
+      setSchedulesHistory([]);
     });
-
     return () => unsubscribe();
-  }, [auth.currentUser]); // Re-subscribe when user changes
+  }, [authenticatedUid, activeScheduleId, messages.length]);
 
   const deleteSchedule = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
