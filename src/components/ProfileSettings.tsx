@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Mail, Book, GraduationCap, Camera, Save, CheckCircle, Info, Briefcase, Building, Users, Heart, Phone, Trash2, AlertCircle, ShieldCheck, RefreshCw, Lock } from 'lucide-react';
+import { User, Mail, Book, GraduationCap, Camera, Save, CheckCircle, Info, Briefcase, Building, Users, Heart, Phone, Trash2, AlertCircle, ShieldCheck, RefreshCw, Lock, KeyRound, IdCard } from 'lucide-react';
 import { ProfileData, UserRole } from '../types';
 import { isPrivilegedTeamMember } from '../constants';
 import { cn } from '../lib/utils';
@@ -223,6 +223,43 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, onUpd
             {formData.role === 'student' && (
               <>
                 <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Enrolled Teacher's Class Code</label>
+                  <div className="relative">
+                    <Book className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input 
+                      type="text" 
+                      value={formData.classCode || ''}
+                      onChange={e => setFormData(prev => ({ ...prev, classCode: e.target.value.toUpperCase() }))}
+                      placeholder="e.g. CLS-4921"
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-mono text-sm uppercase focus:ring-2 focus:ring-indigo-500 transition-all dark:text-white"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Assigned Student ID</label>
+                  <div className="relative">
+                    <IdCard className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-500" size={18} />
+                    <input 
+                      type="text" 
+                      value={formData.studentId || ''}
+                      disabled
+                      className="w-full pl-12 pr-4 py-4 bg-slate-100 dark:bg-slate-800/60 border-none rounded-2xl font-mono font-bold text-indigo-700 dark:text-indigo-400 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Parent Access Key (Share with Guardian)</label>
+                  <div className="relative">
+                    <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500" size={18} />
+                    <input 
+                      type="text" 
+                      value={formData.parentId || ''}
+                      disabled
+                      className="w-full pl-12 pr-4 py-4 bg-slate-100 dark:bg-slate-800/60 border-none rounded-2xl font-mono font-bold text-emerald-700 dark:text-emerald-400 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Course / Branch</label>
                   <div className="relative">
                     <GraduationCap className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -251,6 +288,22 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, onUpd
 
             {formData.role === 'teacher' && (
               <>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">My Class Enrollment Code</label>
+                    <span className="text-[10px] text-indigo-500 font-bold uppercase tracking-wider">Given to students</span>
+                  </div>
+                  <div className="relative">
+                    <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-500" size={18} />
+                    <input 
+                      type="text" 
+                      value={formData.classCode || ''}
+                      onChange={e => setFormData(prev => ({ ...prev, classCode: e.target.value.toUpperCase() }))}
+                      placeholder="e.g. CLS-4921"
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-mono font-bold uppercase text-indigo-700 dark:text-indigo-400 focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Department</label>
                   <div className="relative">
@@ -294,9 +347,23 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, onUpd
               <>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Child's Name</label>
-                    <span className="text-[10px] text-indigo-500 font-bold uppercase tracking-wider">Required for live results</span>
+                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Ward's Parent Access ID</label>
+                    <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider">PAR-XXXX</span>
                   </div>
+                  <div className="relative">
+                    <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500" size={18} />
+                    <input 
+                      type="text" 
+                      value={formData.parentId || ''}
+                      onChange={e => setFormData(prev => ({ ...prev, parentId: e.target.value.toUpperCase() }))}
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-mono font-bold uppercase text-emerald-700 dark:text-emerald-400 focus:ring-2 focus:ring-emerald-500 transition-all"
+                      placeholder="e.g. PAR-4042"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 ml-2 font-medium">Auto-links to your child's live marks, SGPI, and attendance records.</p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Child's Name</label>
                   <div className="relative">
                     <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                     <input 
@@ -304,10 +371,9 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, onUpd
                       value={formData.childName || ''}
                       onChange={e => setFormData(prev => ({ ...prev, childName: e.target.value }))}
                       className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 transition-all dark:text-white"
-                      placeholder="Enter child's full name exactly"
+                      placeholder="Child's full name"
                     />
                   </div>
-                  <p className="text-[10px] text-slate-400 ml-2 font-medium">Link by child's name to see their live performance and teacher's marks.</p>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Relationship</label>

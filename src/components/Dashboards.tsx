@@ -29,9 +29,15 @@ import {
   Send,
   Brain,
   HeartHandshake,
-  Sparkles
+  Sparkles,
+  Plus,
+  Trash2,
+  Copy,
+  KeyRound,
+  IdCard,
+  Edit2
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LineChart, 
   Line, 
@@ -54,23 +60,13 @@ import { cn } from '../lib/utils';
 import * as XLSX from 'xlsx';
 import { db, auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, query, orderBy, updateDoc, doc, setDoc, getDocs, addDoc, serverTimestamp, writeBatch, limit } from 'firebase/firestore';
-import { ConsistencyData } from '../types';
+import { collection, onSnapshot, query, orderBy, updateDoc, doc, setDoc, getDocs, addDoc, deleteDoc, serverTimestamp, writeBatch, limit, where } from 'firebase/firestore';
+import { ConsistencyData, Student } from '../types';
 import { Notice } from './NoticeBoard';
+import { DEFAULT_TEACHER_CLASS_CODE, generateStudentId, generateParentId } from '../lib/id-generator';
 
-interface Student {
-  id: string;
-  rollNo: string;
-  name: string;
-  sem4: string;
-  ia1: number;
-  ia2: number;
-  attendance: number;
-  quizPass: number;
-}
-
-const generateInitialStudents = () => {
-  const students = [];
+const generateInitialStudents = (): Student[] => {
+  const students: Student[] = [];
   const names = [
     "Aarav", "Aditi", "Advait", "Akash", "Ananya", "Arjun", "Avni", "Bhavya", "Chaitanya", "Deepak",
     "Esha", "Gaurav", "Ishani", "Kabir", "Kavya", "Manish", "Meera", "Nikhil", "Pooja", "Pranav",
@@ -79,18 +75,25 @@ const generateInitialStudents = () => {
   const lastNames = ["Sharma", "Verma", "Gupta", "Malhotra", "Joshi", "Patil", "Deshmukh", "Kulkarni", "Iyer", "Nair"];
 
   for (let i = 1; i <= 120; i++) {
-    const firstName = names[Math.floor(Math.random() * names.length)];
-    const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
-      students.push({
-        id: `student-initial-${i}`,
-        rollNo: `INFTT-1-${i.toString().padStart(3, '0')}`,
-        name: `${firstName} ${lastName}`,
-        sem4: (Math.random() * (10 - 6) + 6).toFixed(2),
-        ia1: Math.floor(Math.random() * 21),
-        ia2: Math.floor(Math.random() * 21),
-        attendance: Math.floor(Math.random() * 41) + 60, // 60-100%
-        quizPass: Math.floor(Math.random() * 31) + 70   // 70-100%
-      });
+    const firstName = names[(i - 1) % names.length];
+    const lastName = lastNames[(i - 1) % lastNames.length];
+    const studentNum = 4000 + i;
+    students.push({
+      id: `student-initial-${i}`,
+      studentId: `STU-${studentNum}`,
+      parentId: `PAR-${studentNum}`,
+      classCode: DEFAULT_TEACHER_CLASS_CODE,
+      rollNo: `INFTT-1-${i.toString().padStart(3, '0')}`,
+      name: `${firstName} ${lastName}`,
+      sem4: (Math.random() * (10 - 6) + 6).toFixed(2),
+      ia1: Math.floor(Math.random() * 21),
+      ia2: Math.floor(Math.random() * 21),
+      attendance: Math.floor(Math.random() * 41) + 60, // 60-100%
+      quizPass: Math.floor(Math.random() * 31) + 70,   // 70-100%
+      batch: "INFTT-1",
+      college: "Institute of Engineering & Technology",
+      course: "B.E. Information Technology"
+    });
   }
   return students;
 };
@@ -124,15 +127,33 @@ const gradeDistribution = [
 
 interface TeacherDashboardProps {
   teacherName?: string;
+  classCode?: string;
   searchQuery?: string;
   notices?: Notice[];
 }
 
-export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName = 'Prof. Amit Jadhav', searchQuery = '', notices = [] }) => {
+export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ 
+  teacherName = 'Prof. Amit Jadhav', 
+  classCode = DEFAULT_TEACHER_CLASS_CODE,
+  searchQuery = '', 
+  notices = [] 
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [students, setStudents] = useState<Student[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editStudent, setEditStudent] = useState({ name: '', rollNo: '', sem4: '', ia1: 0, ia2: 0, attendance: 0, quizPass: 0 });
+  const [classCodeCopied, setClassCodeCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [newStudent, setNewStudent] = useState({
+    name: '',
+    rollNo: '',
+    sem4: '9.20',
+    ia1: 18,
+    ia2: 17,
+    attendance: 92,
+    quizPass: 86
+  });
 
   // Sync internal searchTerm with global searchQuery
   useEffect(() => {
@@ -219,8 +240,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
 
   const filteredStudents = students.filter(s => 
     s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    s.rollNo.toLowerCase().includes(searchTerm.toLowerCase())
+    s.rollNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.studentId && s.studentId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (s.parentId && s.parentId.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
 
   const handleUpdateStudent = async (id: string) => {
     try {
@@ -237,6 +261,73 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
     } catch (error) {
       console.error("Error updating student record:", error);
     }
+  };
+
+  const handleCreateStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStudent.name.trim() || !newStudent.rollNo.trim()) return;
+
+    const nextSeed = 4000 + students.length + 1;
+    const studentId = generateStudentId(nextSeed);
+    const parentId = generateParentId(nextSeed);
+    const assignedClassCode = classCode || DEFAULT_TEACHER_CLASS_CODE;
+
+    const createdStudent: Student = {
+      id: `student-${Date.now()}`,
+      studentId,
+      parentId,
+      classCode: assignedClassCode,
+      name: newStudent.name.trim(),
+      rollNo: newStudent.rollNo.trim().toUpperCase(),
+      sem4: newStudent.sem4 || "9.00",
+      ia1: Number(newStudent.ia1) || 18,
+      ia2: Number(newStudent.ia2) || 17,
+      attendance: Number(newStudent.attendance) || 90,
+      quizPass: Number(newStudent.quizPass) || 85,
+      batch: "INFTT-1",
+      college: "Institute of Engineering & Technology",
+      course: "B.E. Information Technology"
+    };
+
+    try {
+      const docRef = await addDoc(collection(db, 'students'), createdStudent);
+      createdStudent.id = docRef.id;
+    } catch (err) {
+      console.warn("Could not save to Firestore, saving locally:", err);
+    }
+
+    const updated = [createdStudent, ...students];
+    setStudents(updated);
+    try {
+      localStorage.setItem('eduplan_local_students', JSON.stringify(updated));
+    } catch {}
+
+    setShowAddStudentModal(false);
+    setNewStudent({
+      name: '',
+      rollNo: '',
+      sem4: '9.20',
+      ia1: 18,
+      ia2: 17,
+      attendance: 92,
+      quizPass: 86
+    });
+  };
+
+  const handleDeleteStudent = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to remove ${name} from your class roster?`)) return;
+    try {
+      if (!id.startsWith('student-initial-')) {
+        await deleteDoc(doc(db, 'students', id));
+      }
+    } catch (err) {
+      console.warn("Could not delete from Firestore, deleting locally:", err);
+    }
+    const updated = students.filter(s => s.id !== id);
+    setStudents(updated);
+    try {
+      localStorage.setItem('eduplan_local_students', JSON.stringify(updated));
+    } catch {}
   };
 
   const exportToExcel = () => {
@@ -358,63 +449,194 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
         </div>
       </header>
 
-      {/* Formal Key Academic Indicators */}
-      <section aria-label="Key Academic Indicators" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Avg. Sem-4 SGPI</p>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{avgSem4}</span>
-            <span className="text-xs font-medium text-slate-400">/ 10.0</span>
+      {/* Class Enrollment Code Banner */}
+      <section className="bg-gradient-to-r from-indigo-900/60 via-slate-900 to-indigo-950/60 border border-indigo-700/50 rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+        <div className="flex items-start sm:items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0">
+            <KeyRound size={24} />
           </div>
-          <p className="mt-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-            <TrendingUp size={13} /> +0.28 vs Sem 3
-          </p>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">Class Enrollment Code</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">Live & Active</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2.5 mt-1">
+              <span className="text-2xl sm:text-3xl font-mono font-black text-white tracking-widest">{classCode}</span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(classCode);
+                  setClassCodeCopied(true);
+                  setTimeout(() => setClassCodeCopied(false), 2500);
+                }}
+                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                {classCodeCopied ? <Check size={14} /> : <Copy size={14} />}
+                <span>{classCodeCopied ? 'Copied Code!' : 'Copy Class Code'}</span>
+              </button>
+            </div>
+            <p className="text-xs text-slate-300 mt-1">
+              Share this code with your students. When students enroll with this code, they are assigned a unique <strong>Student ID</strong> and paired <strong>Parent Access ID</strong>.
+            </p>
+          </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Avg. IA-1 Score</p>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{avgIa1}</span>
-            <span className="text-xs font-medium text-slate-400">/ 20.0</span>
-          </div>
-          <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-            Passing Benchmark: 8.0
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Avg. IA-2 Score</p>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{avgIa2}</span>
-            <span className="text-xs font-medium text-slate-400">/ 20.0</span>
-          </div>
-          <p className="mt-1 text-[11px] font-medium text-indigo-600 dark:text-indigo-400">
-            Evaluated for {students.length} students
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">IA-1 Clearance</p>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{ia1PassPct}%</span>
-            <span className="text-xs font-medium text-slate-400">({ia1PassCount}/{students.length})</span>
-          </div>
-          <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400">
-            {remedialCount} need remedial
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs col-span-2 md:col-span-1">
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Class Attendance</p>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{avgAttendance}%</span>
-            <span className="text-xs font-medium text-slate-400">avg</span>
-          </div>
-          <p className="mt-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
-            {atRiskAttendanceCount} below 75% norm
-          </p>
+        <div className="flex items-center gap-3 shrink-0">
+          <button
+            onClick={() => setShowAddStudentModal(true)}
+            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md shadow-indigo-600/30 flex items-center gap-2 cursor-pointer active:scale-95"
+          >
+            <Plus size={16} />
+            <span>Add Student to Class</span>
+          </button>
         </div>
       </section>
+
+      {/* Add Student Modal */}
+      <AnimatePresence>
+        {showAddStudentModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg p-6 sm:p-8 shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setShowAddStudentModal(false)}
+                className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center">
+                  <Plus size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Enroll New Student</h3>
+                  <p className="text-xs text-slate-500">Auto-assigns Student ID and paired Parent Access ID</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleCreateStudent} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Student Full Name</label>
+                    <input 
+                      type="text" 
+                      value={newStudent.name}
+                      onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
+                      placeholder="e.g. Varun Kulkarni"
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Roll Number</label>
+                    <input 
+                      type="text" 
+                      value={newStudent.rollNo}
+                      onChange={(e) => setNewStudent({ ...newStudent, rollNo: e.target.value })}
+                      placeholder="e.g. INFTT-1-121"
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Sem 4 SGPI</label>
+                    <input 
+                      type="text" 
+                      value={newStudent.sem4}
+                      onChange={(e) => setNewStudent({ ...newStudent, sem4: e.target.value })}
+                      placeholder="9.20"
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">IA-1 (Max 20)</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="20"
+                      value={newStudent.ia1}
+                      onChange={(e) => setNewStudent({ ...newStudent, ia1: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">IA-2 (Max 20)</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="20"
+                      value={newStudent.ia2}
+                      onChange={(e) => setNewStudent({ ...newStudent, ia2: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Attendance %</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="100"
+                      value={newStudent.attendance}
+                      onChange={(e) => setNewStudent({ ...newStudent, attendance: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Quiz Pass %</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="100"
+                      value={newStudent.quizPass}
+                      onChange={(e) => setNewStudent({ ...newStudent, quizPass: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/50 rounded-xl text-xs space-y-1">
+                  <div className="flex items-center justify-between text-indigo-700 dark:text-indigo-300 font-semibold">
+                    <span>Generated Student ID:</span>
+                    <span className="font-mono font-bold">STU-{4000 + students.length + 1}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-300 font-semibold">
+                    <span>Generated Parent Access ID:</span>
+                    <span className="font-mono font-bold">PAR-{4000 + students.length + 1}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-3">
+                  <button 
+                    type="button" 
+                    onClick={() => setShowAddStudentModal(false)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-800"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/25 flex items-center gap-1.5"
+                  >
+                    <Plus size={15} />
+                    <span>Confirm & Add Student</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
 
 
 
@@ -482,11 +704,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
             </div>
 
             {/* Search Input */}
-            <div className="relative w-full sm:w-64">
+            <div className="relative w-full sm:w-80">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input 
                 type="text" 
-                placeholder="Search roll or student name..." 
+                placeholder="Search roll, name, STU-ID, or PAR-Key..." 
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                 className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
@@ -500,15 +722,17 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                <th className="px-4 py-3">Roll Number</th>
-                <th className="px-4 py-3">Student Full Name</th>
-                <th className="px-4 py-3">Sem 4 SGPI</th>
-                <th className="px-4 py-3">Attendance</th>
-                <th className="px-4 py-3">Quiz Pass %</th>
-                <th className="px-4 py-3">IA-1 (Max 20)</th>
-                <th className="px-4 py-3">IA-2 (Max 20)</th>
-                <th className="px-4 py-3">Evaluation Status</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-3 py-3">Roll Number</th>
+                <th className="px-3 py-3">Student Name</th>
+                <th className="px-3 py-3">Student ID</th>
+                <th className="px-3 py-3">Parent Access ID</th>
+                <th className="px-3 py-3">Sem 4 SGPI</th>
+                <th className="px-3 py-3">Attendance</th>
+                <th className="px-3 py-3">Quiz %</th>
+                <th className="px-3 py-3">IA-1</th>
+                <th className="px-3 py-3">IA-2</th>
+                <th className="px-3 py-3">Evaluation</th>
+                <th className="px-3 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -516,13 +740,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
                 const isEditing = editingId === student.id;
                 const isRemedial = student.ia1 < 8;
                 const isLowAttendance = student.attendance < 75;
+                const studentIdVal = student.studentId || `STU-${4000 + idx + 1}`;
+                const parentIdVal = student.parentId || `PAR-${4000 + idx + 1}`;
 
                 return (
                   <tr 
                     key={student.id ? `${student.id}-${idx}` : `student-${idx}`}
                     className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
                   >
-                    <td className="px-4 py-3 font-mono font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                    <td className="px-3 py-3 font-mono font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">
                       {isEditing ? (
                         <input 
                           type="text" 
@@ -535,20 +761,60 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
                       )}
                     </td>
 
-                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-white whitespace-nowrap">
+                    <td className="px-3 py-3 font-medium text-slate-900 dark:text-white whitespace-nowrap">
                       {isEditing ? (
                         <input 
                           type="text" 
                           value={editStudent.name}
                           onChange={(e) => setEditStudent({ ...editStudent, name: e.target.value })}
-                          className="w-48 px-2 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-xs"
+                          className="w-44 px-2 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-xs"
                         />
                       ) : (
                         student.name
                       )}
                     </td>
 
-                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300 font-mono">
+                    {/* Student ID Column */}
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1.5 font-mono text-[11px] font-bold text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">
+                        <IdCard size={12} className="shrink-0" />
+                        <span>{studentIdVal}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(studentIdVal);
+                            setCopiedId(studentIdVal);
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }}
+                          className="ml-1 text-indigo-500 hover:text-indigo-800 dark:hover:text-indigo-200 cursor-pointer p-0.5"
+                          title="Copy Student ID"
+                        >
+                          {copiedId === studentIdVal ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+                        </button>
+                      </div>
+                    </td>
+
+                    {/* Parent Access ID Column */}
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1.5 font-mono text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                        <KeyRound size={12} className="shrink-0" />
+                        <span>{parentIdVal}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(parentIdVal);
+                            setCopiedId(parentIdVal);
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }}
+                          className="ml-1 text-emerald-500 hover:text-emerald-800 dark:hover:text-emerald-200 cursor-pointer p-0.5"
+                          title="Copy Parent Access ID (Share with Parent)"
+                        >
+                          {copiedId === parentIdVal ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+                        </button>
+                      </div>
+                    </td>
+
+                    <td className="px-3 py-3 text-slate-700 dark:text-slate-300 font-mono">
                       {isEditing ? (
                         <input 
                           type="text" 
@@ -561,7 +827,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
                       )}
                     </td>
 
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       {isEditing ? (
                         <input 
                           type="number" 
@@ -583,7 +849,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
                       )}
                     </td>
 
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400 font-mono">
+                    <td className="px-3 py-3 text-slate-600 dark:text-slate-400 font-mono">
                       {isEditing ? (
                         <input 
                           type="number" 
@@ -598,7 +864,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
                       )}
                     </td>
 
-                    <td className="px-4 py-3 font-mono font-bold">
+                    <td className="px-3 py-3 font-mono font-bold">
                       {isEditing ? (
                         <input 
                           type="number" 
@@ -615,7 +881,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
                       )}
                     </td>
 
-                    <td className="px-4 py-3 font-mono font-bold">
+                    <td className="px-3 py-3 font-mono font-bold">
                       {isEditing ? (
                         <input 
                           type="number" 
@@ -632,18 +898,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
                       )}
                     </td>
 
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-3 py-3 whitespace-nowrap">
                       {isRemedial ? (
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/30 dark:border-rose-800">
                           Remedial
                         </span>
                       ) : isLowAttendance ? (
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
-                          Attendance Shortage
+                          Shortage
                         </span>
                       ) : student.ia1 >= 15 ? (
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800">
-                          High Honors
+                          Honors
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
@@ -652,48 +918,62 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
                       )}
                     </td>
 
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <td className="px-3 py-3 text-right whitespace-nowrap">
                       {isEditing ? (
                         <div className="flex items-center justify-end gap-1.5">
                           <button 
+                            type="button"
                             onClick={() => handleUpdateStudent(student.id)}
-                            className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                            className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 cursor-pointer"
                             title="Save Changes"
                           >
                             <Check size={14} />
                           </button>
                           <button 
+                            type="button"
                             onClick={() => setEditingId(null)}
-                            className="p-1 bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-400"
+                            className="p-1 bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-400 cursor-pointer"
                             title="Cancel"
                           >
                             <X size={14} />
                           </button>
                         </div>
                       ) : (
-                        <button 
-                          onClick={() => {
-                            setEditingId(student.id);
-                            setEditStudent({ 
-                              name: student.name, 
-                              rollNo: student.rollNo, 
-                              sem4: student.sem4, 
-                              ia1: student.ia1, 
-                              ia2: student.ia2,
-                              attendance: student.attendance || 0,
-                              quizPass: student.quizPass || 0
-                            });
-                          }}
-                          className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded hover:text-indigo-600 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors"
-                        >
-                          Edit
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setEditingId(student.id);
+                              setEditStudent({ 
+                                name: student.name, 
+                                rollNo: student.rollNo, 
+                                sem4: student.sem4, 
+                                ia1: student.ia1, 
+                                ia2: student.ia2,
+                                attendance: student.attendance || 0,
+                                quizPass: student.quizPass || 0
+                              });
+                            }}
+                            className="px-2 py-1 text-[11px] font-semibold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded hover:text-indigo-600 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteStudent(student.id, student.name)}
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition-colors cursor-pointer"
+                            title={`Remove ${student.name} from class roster`}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
                 );
               })}
             </tbody>
+
           </table>
 
           {tableStudents.length === 0 && (
@@ -860,9 +1140,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Dispatch Form */}
-          <div className="lg:col-span-7 space-y-4">
+        <div className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Circular Title / Subject Header
@@ -937,141 +1215,78 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacherName 
               {isPosting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
               <span>Broadcast Official Circular</span>
             </button>
-          </div>
-
-          {/* Recent History Log */}
-          <div className="lg:col-span-5 flex flex-col justify-between border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 pt-6 lg:pt-0 lg:pl-8">
-            <div>
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
-                  Recent Dispatched Circulars
-                </span>
-                <History size={14} className="text-slate-400" />
-              </div>
-
-              <div className="space-y-2.5 max-h-[260px] overflow-y-auto pr-1">
-                {notices.slice(0, 4).map((notice, idx) => (
-                  <div key={notice.id ? `${notice.id}-${idx}` : `notice-${idx}`} className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded border border-slate-200/80 dark:border-slate-800 text-xs space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-semibold text-slate-900 dark:text-white truncate">{notice.title}</p>
-                      <span className="text-[10px] font-mono uppercase bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300 shrink-0">
-                        {notice.targetAudience === 'specific' ? `#${notice.targetRollNo}` : notice.targetAudience || 'All'}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">{notice.content}</p>
-                    <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500 pt-0.5">
-                      {notice.author || teacherName} • {notice.date?.toDate ? notice.date.toDate().toLocaleDateString('en-GB') : 'Today'}
-                    </p>
-                  </div>
-                ))}
-                {notices.length === 0 && (
-                  <p className="text-xs text-slate-400 italic text-center py-6">No previous circulars found in faculty records.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 4. AI INSIGHTS (Full Width Formal Section directly below Quick Notice) */}
-      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 gap-2 mb-6">
-          <div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              AI Insights: Class Diagnostics & Actionable Academic Advisory
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Automated algorithmic performance flagging based on continuous evaluation metrics
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                setReportGenerated(true);
-                setTimeout(() => setReportGenerated(false), 3500);
-              }}
-              className="px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-bold uppercase tracking-wider rounded transition-colors flex items-center gap-2 cursor-pointer"
-            >
-              {reportGenerated ? (
-                <>
-                  <Check size={14} className="text-emerald-600" />
-                  Report Compiled & Ready
-                </>
-              ) : (
-                <>
-                  <FileSpreadsheet size={14} className="text-indigo-600" />
-                  Generate Faculty Remedial Report
-                </>
-              )}
-            </button>
-            <Activity size={18} className="text-indigo-600 dark:text-indigo-400" />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Alert 1 */}
-          <div className="p-4 bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-lg text-xs space-y-2">
-            <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400 font-bold">
-              <AlertTriangle size={16} />
-              <span className="text-xs font-bold uppercase tracking-wider">Remedial Attention Required</span>
-            </div>
-            <p className="text-rose-700 dark:text-rose-300 leading-relaxed">
-              <strong>{remedialCount} students</strong> scored below the passing benchmark (8/20) in IA-1. Recommended: Schedule a unit revision session for modules 2 & 3.
-            </p>
-            <div className="pt-2 border-t border-rose-200/60 dark:border-rose-900/40 text-[11px] text-rose-600 dark:text-rose-400 font-medium">
-              Threshold: &lt; 8.0 marks in IA-1
-            </div>
-          </div>
-
-          {/* Alert 2 */}
-          <div className="p-4 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-lg text-xs space-y-2">
-            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold">
-              <AlertTriangle size={16} />
-              <span className="text-xs font-bold uppercase tracking-wider">Attendance Deficit Warning</span>
-            </div>
-            <p className="text-amber-700 dark:text-amber-300 leading-relaxed">
-              <strong>{atRiskAttendanceCount} students</strong> have attendance below the mandatory 75% university regulation. Automated parent notification is active.
-            </p>
-            <div className="pt-2 border-t border-amber-200/60 dark:border-amber-900/40 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-              Regulation: Minimum 75% aggregate
-            </div>
-          </div>
-
-          {/* Alert 3 */}
-          <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50 rounded-lg text-xs space-y-2">
-            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-bold">
-              <CheckCircle size={16} />
-              <span className="text-xs font-bold uppercase tracking-wider">Cohort Progression</span>
-            </div>
-            <p className="text-emerald-700 dark:text-emerald-300 leading-relaxed">
-              Class SGPI average gained <strong>+0.28 points</strong> across Semester 3 to 4. <strong>{honorsCount} students</strong> qualified for Honors distinction.
-            </p>
-            <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-900/40 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-              Distinction Criteria: Both IA-1 & IA-2 &ge; 15
-            </div>
-          </div>
-        </div>
-      </section>
+          </div>      </section>
     </div>
   );
 };
 
 export const ParentDashboard: React.FC<{ 
-  childData: any,
-  activeTab?: string, 
-  searchQuery?: string,
-  parentName?: string
-}> = ({ childData, activeTab = 'performance', searchQuery = '', parentName }) => {
+  childData: any;
+  activeTab?: string; 
+  searchQuery?: string;
+  parentName?: string;
+  parentId?: string;
+  studentId?: string;
+  onSwitchParentId?: (id: string) => void;
+}> = ({ childData, activeTab = 'performance', searchQuery = '', parentName, parentId, studentId, onSwitchParentId }) => {
+  const [switchInput, setSwitchInput] = useState('');
+  const [switchError, setSwitchError] = useState<string | null>(null);
+
+  const handleSwitchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!switchInput.trim()) return;
+    if (onSwitchParentId) {
+      onSwitchParentId(switchInput.trim().toUpperCase());
+      setSwitchInput('');
+      setSwitchError(null);
+    }
+  };
+
   if (!childData) {
     return (
-      <div className="p-10 flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/20 rounded-full flex items-center justify-center mb-6">
-          <Loader2 className="animate-spin text-indigo-600" size={40} />
+      <div className="p-10 flex flex-col items-center justify-center min-h-[60vh] text-center max-w-lg mx-auto">
+        <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mb-6 text-indigo-600">
+          <KeyRound size={32} />
         </div>
-        <h2 className="text-2xl font-display font-black text-slate-900 dark:text-white mb-2">Syncing Child Data...</h2>
-        <p className="text-slate-500 dark:text-slate-400 max-w-sm">
-          Please ensure your child's name in your profile matches their name in the college records.
+        <h2 className="text-2xl font-display font-black text-slate-900 dark:text-white mb-2">No Ward Record Linked</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+          Please enter the auto-generated <strong>Parent Access ID (PAR-XXXX)</strong> provided by your child's teacher or student portal.
         </p>
+
+        <form onSubmit={handleSwitchSubmit} className="flex items-center gap-2 w-full">
+          <input 
+            type="text"
+            value={switchInput}
+            onChange={(e) => setSwitchInput(e.target.value.toUpperCase())}
+            placeholder="e.g. PAR-4042"
+            className="flex-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-sm uppercase text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+          />
+          <button
+            type="submit"
+            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl cursor-pointer"
+          >
+            Link Ward
+          </button>
+        </form>
+
+        <div className="flex items-center gap-2 mt-4 text-xs text-slate-400">
+          <span>Try Demo:</span>
+          <button 
+            type="button" 
+            onClick={() => onSwitchParentId && onSwitchParentId('PAR-4042')}
+            className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+          >
+            PAR-4042 (Aarav Sharma)
+          </button>
+          <span>•</span>
+          <button 
+            type="button" 
+            onClick={() => onSwitchParentId && onSwitchParentId('PAR-4001')}
+            className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+          >
+            PAR-4001
+          </button>
+        </div>
       </div>
     );
   }
@@ -1086,7 +1301,6 @@ export const ParentDashboard: React.FC<{
   const quizPassVal = displayChild.quizPass ?? 0;
 
   // Consistency Score Calculation: Avg of Attendance, Quiz Pass, and IA Performance
-  // IA Performance is (ia1+ia2)/40 * 100
   const iaPercent = Math.min(((ia1 + ia2) / 40) * 100, 100);
   const consistencyScore = Math.round((attendanceVal + quizPassVal + iaPercent) / 3) || 0;
 
@@ -1144,7 +1358,7 @@ export const ParentDashboard: React.FC<{
             <div className="space-y-4">
               <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded border border-slate-200/80 dark:border-slate-800">
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Affiliated Institution</p>
-                <p className="text-sm font-semibold text-slate-900 dark:text-white">{displayChild.college || "Fr. Conceicao Rodrigues College of Engineering"}</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">{displayChild.college || "Institute of Engineering & Technology"}</p>
               </div>
               <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded border border-slate-200/80 dark:border-slate-800">
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Degree Program & Department</p>
@@ -1270,12 +1484,15 @@ export const ParentDashboard: React.FC<{
     ? displayChild.name.split(' ')[0] 
     : "Your child";
 
+  const resolvedStudentId = displayChild.studentId || studentId || 'STU-4042';
+  const resolvedParentId = displayChild.parentId || parentId || 'PAR-4042';
+
   return (
     <div className="p-6 md:p-8 space-y-6 max-w-[1400px] mx-auto font-sans">
-      {/* Formal Header Banner */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-mono uppercase text-slate-500 mb-1">
+      {/* Formal Header Banner with Student ID & Parent Access Key */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-mono uppercase text-slate-500">
             <span>Parent Portal</span>
             {parentName && (
               <>
@@ -1284,18 +1501,79 @@ export const ParentDashboard: React.FC<{
               </>
             )}
             <span>•</span>
-            <span className="text-indigo-600 dark:text-indigo-400 font-bold">Roll No: {displayChild.rollNo || 'N/A'}</span>
+            <span className="text-indigo-600 dark:text-indigo-400 font-bold">Roll No: {displayChild.rollNo || 'INFTT-1-042'}</span>
+            <span>•</span>
+            <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+              Class: {displayChild.classCode || 'CLS-4921'}
+            </span>
           </div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Academic Performance Summary: {displayChild.name || 'Enrolled Student'}
+
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+            Ward Performance Report: <span className="text-indigo-600 dark:text-indigo-400">{displayChild.name || 'Enrolled Student'}</span>
           </h2>
+
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-xs font-mono font-bold text-indigo-700 dark:text-indigo-300">
+              <IdCard size={13} />
+              <span>Student ID: {resolvedStudentId}</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-xs font-mono font-bold text-emerald-700 dark:text-emerald-300">
+              <KeyRound size={13} />
+              <span>Parent Access Key: {resolvedParentId}</span>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-mono font-semibold rounded border border-slate-200 dark:border-slate-700">
-            Current Sem 4 SGPI: {sem4} / 10.0
-          </span>
+
+        {/* Quick Ward ID Switcher */}
+        <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 max-w-sm w-full">
+          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+            <span>Switch Linked Ward</span>
+            <span className="text-[9px] text-indigo-500 lowercase font-mono">PAR-XXXX</span>
+          </p>
+          <form onSubmit={handleSwitchSubmit} className="flex items-center gap-2">
+            <input 
+              type="text"
+              value={switchInput}
+              onChange={(e) => setSwitchInput(e.target.value.toUpperCase())}
+              placeholder="e.g. PAR-4001"
+              className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
+            />
+            <button
+              type="submit"
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
+            >
+              Lookup
+            </button>
+          </form>
+          <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-400">
+            <span>Quick:</span>
+            <button 
+              type="button" 
+              onClick={() => onSwitchParentId && onSwitchParentId('PAR-4042')}
+              className="text-indigo-500 hover:underline cursor-pointer font-mono"
+            >
+              PAR-4042
+            </button>
+            <span>•</span>
+            <button 
+              type="button" 
+              onClick={() => onSwitchParentId && onSwitchParentId('PAR-4001')}
+              className="text-indigo-500 hover:underline cursor-pointer font-mono"
+            >
+              PAR-4001
+            </button>
+            <span>•</span>
+            <button 
+              type="button" 
+              onClick={() => onSwitchParentId && onSwitchParentId('PAR-4002')}
+              className="text-indigo-500 hover:underline cursor-pointer font-mono"
+            >
+              PAR-4002
+            </button>
+          </div>
         </div>
       </div>
+
 
       {/* Performance Section */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

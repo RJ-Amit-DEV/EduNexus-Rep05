@@ -18,7 +18,11 @@ import {
   CheckCircle2,
   X,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  IdCard,
+  KeyRound,
+  Copy,
+  Check
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { DEADLINES } from '../constants';
@@ -64,6 +68,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   });
 
   const [showAddDeadline, setShowAddDeadline] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -374,6 +379,66 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Student Enrollment & Identity Card */}
+      <section className="bg-gradient-to-r from-indigo-950/60 via-slate-900 to-indigo-900/50 border border-indigo-700/50 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+        <div className="flex items-start sm:items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0">
+            <IdCard size={24} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">Class Enrollment & Identity</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-semibold font-mono">
+                Class: {profileData?.classCode || academicRecord?.classCode || 'CLS-4921'}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 mt-2">
+              {/* Student ID badge */}
+              <div className="flex items-center gap-2 bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-700">
+                <span className="text-xs text-slate-400">Student ID:</span>
+                <span className="font-mono font-bold text-white text-sm">{profileData?.studentId || academicRecord?.studentId || 'STU-4042'}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(profileData?.studentId || academicRecord?.studentId || 'STU-4042');
+                    setCopiedKey('student');
+                    setTimeout(() => setCopiedKey(null), 2000);
+                  }}
+                  className="text-indigo-400 hover:text-indigo-200 p-0.5 cursor-pointer ml-1"
+                  title="Copy Student ID"
+                >
+                  {copiedKey === 'student' ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                </button>
+              </div>
+
+              {/* Parent Access ID badge */}
+              <div className="flex items-center gap-2 bg-emerald-950/50 px-3 py-1.5 rounded-xl border border-emerald-500/40">
+                <KeyRound size={14} className="text-emerald-400" />
+                <span className="text-xs text-emerald-200">Parent Access ID:</span>
+                <span className="font-mono font-bold text-emerald-300 text-sm">{profileData?.parentId || academicRecord?.parentId || 'PAR-4042'}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(profileData?.parentId || academicRecord?.parentId || 'PAR-4042');
+                    setCopiedKey('parent');
+                    setTimeout(() => setCopiedKey(null), 2000);
+                  }}
+                  className="text-emerald-400 hover:text-emerald-200 p-0.5 cursor-pointer ml-1"
+                  title="Copy Parent Access ID to share with your guardian"
+                >
+                  {copiedKey === 'parent' ? <Check size={13} className="text-emerald-300" /> : <Copy size={13} />}
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+              Share your <strong>Parent Access ID ({profileData?.parentId || academicRecord?.parentId || 'PAR-4042'})</strong> with your parents or guardians. They use this ID to sign in to the Parent Portal and view your academic progress reports.
+            </p>
+          </div>
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
         {/* Main Content Area */}
