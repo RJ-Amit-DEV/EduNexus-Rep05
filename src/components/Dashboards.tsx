@@ -1503,54 +1503,27 @@ export const ParentDashboard: React.FC<{
           </div>
         </div>
 
-        {/* Quick Ward ID Switcher */}
-        <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 max-w-sm w-full">
-          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-            <span>Switch Linked Ward</span>
-            <span className="text-[9px] text-indigo-500 lowercase font-mono">PAR-XXXX</span>
-          </p>
-          <form onSubmit={handleSwitchSubmit} className="flex items-center gap-2">
-            <input 
-              type="text"
-              value={switchInput}
-              onChange={(e) => setSwitchInput(e.target.value.toUpperCase())}
-              placeholder="e.g. PAR-4001"
-              className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
-            />
-            <button
-              type="submit"
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
-            >
-              Lookup
-            </button>
-          </form>
-          <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-400">
-            <span>Quick:</span>
-            <button 
-              type="button" 
-              onClick={() => onSwitchParentId && onSwitchParentId('PAR-4042')}
-              className="text-indigo-500 hover:underline cursor-pointer font-mono"
-            >
-              PAR-4042
-            </button>
-            <span>•</span>
-            <button 
-              type="button" 
-              onClick={() => onSwitchParentId && onSwitchParentId('PAR-4001')}
-              className="text-indigo-500 hover:underline cursor-pointer font-mono"
-            >
-              PAR-4001
-            </button>
-            <span>•</span>
-            <button 
-              type="button" 
-              onClick={() => onSwitchParentId && onSwitchParentId('PAR-4002')}
-              className="text-indigo-500 hover:underline cursor-pointer font-mono"
-            >
-              PAR-4002
-            </button>
+        {allowDemoLinking && (
+          <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 max-w-sm w-full">
+            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+              Demo Ward Selector
+            </p>
+            <form onSubmit={handleSwitchSubmit} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={switchInput}
+                onChange={(e) => setSwitchInput(e.target.value.toUpperCase())}
+                placeholder="Demo Parent Access ID"
+                className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
+              />
+              <button type="submit" className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all cursor-pointer">
+                Load Demo
+              </button>
+            </form>
+            {switchError && <p role="alert" className="text-xs text-rose-600 mt-2">{switchError}</p>}
+            <p className="text-[10px] text-slate-400 mt-2">Demo data only. Real parent accounts cannot switch children using an access code.</p>
           </div>
-        </div>
+        )}
       </div>
 
 
