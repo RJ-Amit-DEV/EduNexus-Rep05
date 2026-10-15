@@ -1223,7 +1223,8 @@ export const ParentDashboard: React.FC<{
   parentId?: string;
   studentId?: string;
   onSwitchParentId?: (id: string) => void;
-}> = ({ childData, activeTab = 'performance', searchQuery = '', parentName, parentId, studentId, onSwitchParentId }) => {
+  allowDemoLinking?: boolean;
+}> = ({ childData, activeTab = 'performance', searchQuery = '', parentName, parentId, studentId, onSwitchParentId, allowDemoLinking = false }) => {
   const [switchInput, setSwitchInput] = useState('');
   const [switchError, setSwitchError] = useState<string | null>(null);
 
@@ -1243,45 +1244,27 @@ export const ParentDashboard: React.FC<{
         <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mb-6 text-indigo-600">
           <KeyRound size={32} />
         </div>
-        <h2 className="text-2xl font-display font-black text-slate-900 dark:text-white mb-2">No Ward Record Linked</h2>
+        <h2 className="text-2xl font-display font-black text-slate-900 dark:text-white mb-2">No Verified Student Link</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-          Please enter the auto-generated <strong>Parent Access ID (PAR-XXXX)</strong> provided by your child's teacher or student portal.
+          Academic records are visible only after the institution verifies this parent account and links it to the correct student. A Parent Access ID by itself is not proof of identity.
         </p>
-
-        <form onSubmit={handleSwitchSubmit} className="flex items-center gap-2 w-full">
-          <input 
-            type="text"
-            value={switchInput}
-            onChange={(e) => setSwitchInput(e.target.value.toUpperCase())}
-            placeholder="e.g. PAR-4042"
-            className="flex-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-sm uppercase text-slate-900 dark:text-white outline-none focus:border-indigo-500"
-          />
-          <button
-            type="submit"
-            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl cursor-pointer"
-          >
-            Link Ward
-          </button>
-        </form>
-
-        <div className="flex items-center gap-2 mt-4 text-xs text-slate-400">
-          <span>Try Demo:</span>
-          <button 
-            type="button" 
-            onClick={() => onSwitchParentId && onSwitchParentId('PAR-4042')}
-            className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
-          >
-            PAR-4042 (Aarav Sharma)
-          </button>
-          <span>•</span>
-          <button 
-            type="button" 
-            onClick={() => onSwitchParentId && onSwitchParentId('PAR-4001')}
-            className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
-          >
-            PAR-4001
-          </button>
-        </div>
+        {allowDemoLinking && (
+          <>
+            <form onSubmit={handleSwitchSubmit} className="flex items-center gap-2 w-full">
+              <input
+                type="text"
+                value={switchInput}
+                onChange={(e) => setSwitchInput(e.target.value.toUpperCase())}
+                placeholder="Demo Parent Access ID"
+                className="flex-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-sm uppercase text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+              />
+              <button type="submit" className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl cursor-pointer">
+                Load Demo
+              </button>
+            </form>
+            {switchError && <p role="alert" className="text-sm text-rose-600 mt-3">{switchError}</p>}
+          </>
+        )}
       </div>
     );
   }
