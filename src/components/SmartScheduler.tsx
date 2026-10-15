@@ -410,6 +410,14 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
     return () => unsubscribe();
   }, [authenticatedUid, activeScheduleId, messages.length]);
 
+  const deleteRefsInBatches = async (refs: any[]) => {
+    for (let index = 0; index < refs.length; index += 450) {
+      const batch = writeBatch(db);
+      refs.slice(index, index + 450).forEach(ref => batch.delete(ref));
+      await batch.commit();
+    }
+  };
+
   const deleteSchedule = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -431,14 +439,12 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
           await deleteDoc(scheduleRef);
           
           const msgPath = `users/${auth.currentUser!.uid}/scheduler_messages`;
-          const msgSnapshot = await getDocs(collection(db, msgPath));
           const targetConversationId = scheduleToDelete.conversationId || id;
-          
-          const deletePromises = msgSnapshot.docs
-            .filter(doc => doc.data().conversationId === targetConversationId)
-            .map(d => deleteDoc(d.ref));
-            
-          await Promise.all(deletePromises);
+          const msgSnapshot = await getDocs(query(
+            collection(db, msgPath),
+            where('conversationId', '==', targetConversationId)
+          ));
+          await deleteRefsInBatches(msgSnapshot.docs.map(item => item.ref));
 
           if (activeConversationId === targetConversationId) {
             resetAll();
@@ -470,12 +476,10 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
             getDocs(collection(db, msgPath))
           ]);
 
-          const deletePromises = [
-            ...schedulesSnap.docs.map(d => deleteDoc(d.ref)),
-            ...msgsSnap.docs.map(d => deleteDoc(d.ref))
-          ];
-
-          await Promise.all(deletePromises);
+          await deleteRefsInBatches([
+            ...schedulesSnap.docs.map(item => item.ref),
+            ...msgsSnap.docs.map(item => item.ref)
+          ]);
           resetAll();
           setShowHistory(false);
         } catch (error) {
