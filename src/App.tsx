@@ -502,32 +502,38 @@ const AppContent: React.FC = () => {
   const handleSwitchParentId = async (inputKey: string) => {
     const cleanKey = inputKey.trim().toUpperCase();
     if (!cleanKey) return;
-    const derivedStudentId = deriveStudentIdFromParentId(cleanKey);
+    let matches: Student[] = [];
 
-    let match: Student | null = null;
-
-    // Check local student cache first
+    // A parent code must match exactly one record. Never match by name or derived ID.
     try {
       const localStr = localStorage.getItem('eduplan_local_students');
       if (localStr) {
         const list: Student[] = JSON.parse(localStr);
-        match = list.find(s => 
-          s.parentId === cleanKey || 
-          s.studentId === cleanKey || 
-          s.studentId === derivedStudentId ||
-          s.parentId === `PAR-${cleanKey.replace(/[^0-9]/g, '')}`
-        ) || null;
+        matches = list.filter(s => s.parentId?.trim().toUpperCase() === cleanKey);
       }
     } catch (e) {}
 
-    // Check Firestore
-    if (!match) {
+    if (matches.length > 1) {
+      setChildAcademicRecord(null);
+      alert(`Parent Access ID ${cleanKey} is duplicated in the local student cache. The records need to be deduplicated before this code can safely identify a child.`);
+      return;
+    }
+
+    let match: Student | null = matches[0] || null;
+
+    // Query Firestore only for an authenticated account; local portal sessions use local data only.
+    if (!match && auth.currentUser && !profileData.uid.startsWith('parent-') && !profileData.uid.startsWith('demo-')) {
       try {
-        const snap = await getDocs(query(collection(db, 'students'), where('parentId', '==', cleanKey), limit(1)));
-        if (!snap.empty) {
-          match = snap.docs[0].data() as Student;
+        const snap = await getDocs(query(collection(db, 'students'), where('parentId', '==', cleanKey)));
+        if (snap.size > 1) {
+          setChildAcademicRecord(null);
+          alert(`Parent Access ID ${cleanKey} matches multiple Firestore records. Please resolve duplicate IDs before viewing this report.`);
+          return;
         }
-      } catch (e) {}
+        if (!snap.empty) match = { id: snap.docs[0].id, ...snap.docs[0].data() } as Student;
+      } catch (e) {
+        console.warn('Could not verify Parent Access ID against Firestore:', e);
+      }
     }
 
     if (!match) {
@@ -659,26 +665,34 @@ const AppContent: React.FC = () => {
           const pId = payload.parentId || 'PAR-4042';
           const derivedSId = payload.studentId || deriveStudentIdFromParentId(pId);
 
-          let matchedStudent: Student | null = null;
+          let matchedStudents: Student[] = [];
           try {
             const cachedStr = localStorage.getItem('eduplan_local_students');
             if (cachedStr) {
               const list: Student[] = JSON.parse(cachedStr);
-              matchedStudent = list.find(s => 
-                s.parentId === pId || 
-                s.studentId === derivedSId || 
-                s.studentId === pId.replace('PAR-', 'STU-')
-              ) || null;
+              matchedStudents = list.filter(s => s.parentId?.trim().toUpperCase() === pId);
             }
           } catch (e) {}
 
-          if (!matchedStudent) {
+          if (matchedStudents.length > 1) {
+            setAuthError(`Parent Access ID ${pId} is duplicated in local data. Please resolve duplicate IDs before viewing a report.`);
+            setChildAcademicRecord(null);
+            return;
+          }
+
+          let matchedStudent: Student | null = matchedStudents[0] || null;
+          if (!matchedStudent && auth.currentUser) {
             try {
-              const snap = await getDocs(query(collection(db, 'students'), where('parentId', '==', pId), limit(1)));
-              if (!snap.empty) {
-                matchedStudent = snap.docs[0].data() as Student;
+              const snap = await getDocs(query(collection(db, 'students'), where('parentId', '==', pId)));
+              if (snap.size > 1) {
+                setAuthError(`Parent Access ID ${pId} matches multiple student records. Please resolve duplicate IDs first.`);
+                setChildAcademicRecord(null);
+                return;
               }
-            } catch (e) {}
+              if (!snap.empty) matchedStudent = { id: snap.docs[0].id, ...snap.docs[0].data() } as Student;
+            } catch (e) {
+              console.warn('Could not verify parent code against Firestore:', e);
+            }
           }
 
           if (!matchedStudent) {
