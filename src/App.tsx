@@ -762,8 +762,8 @@ const AppContent: React.FC = () => {
           course: 'B.E. Information Technology',
           semester: 'Semester IV',
           classCode: selectedRole === 'teacher' ? DEFAULT_TEACHER_CLASS_CODE : undefined,
-          studentId: initialStudentId,
-          parentId: initialStudentId ? generateParentId(initialStudentId) : undefined
+          studentId: undefined,
+          parentId: undefined
         };
         const profileToSave = Object.fromEntries(
           Object.entries({ ...initialProfile, updatedAt: serverTimestamp() })
