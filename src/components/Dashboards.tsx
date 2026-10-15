@@ -541,7 +541,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Sem 4 SGPI</label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Sem 4 CGPA</label>
                     <input 
                       type="text" 
                       value={newStudent.sem4}
@@ -721,7 +721,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 <th className="px-3 py-3">Student Name</th>
                 <th className="px-3 py-3">Student ID</th>
                 <th className="px-3 py-3">Parent Access ID</th>
-                <th className="px-3 py-3">Sem 4 SGPI</th>
+                <th className="px-3 py-3">Sem 4 CGPA</th>
                 <th className="px-3 py-3">Attendance</th>
                 <th className="px-3 py-3">Quiz %</th>
                 <th className="px-3 py-3">IA-1</th>
@@ -1638,7 +1638,7 @@ export const ParentDashboard: React.FC<{
           </p>
         </div>
 
-        {/* Marks & SGPI Section */}
+        {/* Marks & CGPA Section */}
         <div className="lg:col-span-6 space-y-6">
           <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-xs">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-5">
@@ -1682,7 +1682,7 @@ export const ParentDashboard: React.FC<{
           <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-xs">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-5">
               <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                University Semester Progression (SGPI)
+                University Semester Progression (CGPA)
               </h4>
               <TrendingUp className="text-emerald-500" size={18} />
             </div>
