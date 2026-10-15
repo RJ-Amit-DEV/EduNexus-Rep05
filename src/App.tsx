@@ -200,9 +200,12 @@ const AppContent: React.FC = () => {
       const localStr = localStorage.getItem('eduplan_local_students');
       if (localStr) {
         const list: Student[] = JSON.parse(localStr);
-        const match = list.find(s => s.parentId?.trim().toUpperCase() === targetParentId);
-        if (match) setChildAcademicRecord(match);
-        else setChildAcademicRecord(null);
+        const matches = list.filter(s => s.parentId?.trim().toUpperCase() === targetParentId);
+        if (matches.length === 1) setChildAcademicRecord(matches[0]);
+        else {
+          setChildAcademicRecord(null);
+          if (matches.length > 1) console.error(`Duplicate Parent Access ID detected in local cache: ${targetParentId}`);
+        }
       }
     } catch {
       setChildAcademicRecord(null);
@@ -249,9 +252,12 @@ const AppContent: React.FC = () => {
       const localStr = localStorage.getItem('eduplan_local_students');
       if (localStr) {
         const list: Student[] = JSON.parse(localStr);
-        const match = list.find(s => s.studentId?.trim().toUpperCase() === currentStudentId);
-        if (match) setStudentAcademicRecord(match);
-        else setStudentAcademicRecord(null);
+        const matches = list.filter(s => s.studentId?.trim().toUpperCase() === currentStudentId);
+        if (matches.length === 1) setStudentAcademicRecord(matches[0]);
+        else {
+          setStudentAcademicRecord(null);
+          if (matches.length > 1) console.error(`Duplicate Student ID detected in local cache: ${currentStudentId}`);
+        }
       }
     } catch {
       setStudentAcademicRecord(null);
