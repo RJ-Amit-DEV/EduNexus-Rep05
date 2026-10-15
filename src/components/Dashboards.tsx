@@ -170,7 +170,25 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         const localCached = localStorage.getItem('eduplan_local_students');
         if (localCached) {
           try {
-            setStudents(JSON.parse(localCached));
+            const cachedStudents: Student[] = JSON.parse(localCached);
+            // Migrate the explicitly seeded demo row so PAR-4042 always identifies the advertised demo child.
+            const demoIndex = cachedStudents.findIndex(s => s.id === 'student-initial-42');
+            if (demoIndex >= 0) {
+              cachedStudents[demoIndex] = {
+                ...cachedStudents[demoIndex],
+                studentId: 'STU-4042',
+                parentId: 'PAR-4042',
+                rollNo: 'INFTT-1-042',
+                name: 'Aarav Sharma',
+                sem4: '9.24',
+                ia1: 19,
+                ia2: 18,
+                attendance: 92,
+                quizPass: 88
+              };
+              localStorage.setItem('eduplan_local_students', JSON.stringify(cachedStudents));
+            }
+            setStudents(cachedStudents);
           } catch {
             const initial = generateInitialStudents();
             setStudents(initial);
