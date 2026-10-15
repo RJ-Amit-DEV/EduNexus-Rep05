@@ -661,13 +661,18 @@ const AppContent: React.FC = () => {
         }
 
         if (selectedRole === 'parent') {
-          const signedInUser = auth.currentUser;
+          let signedInUser = auth.currentUser;
           const requestedParentId = payload.parentId?.trim().toUpperCase();
 
-          if (!signedInUser || !requestedParentId) {
-            setAuthError('For student privacy, a Parent Access ID alone cannot unlock academic records. Sign in with the verified parent Google account linked by your institution.');
+          if (!requestedParentId) {
+            setAuthError('Enter the Parent Access ID supplied by your institution.');
             setChildAcademicRecord(null);
             return;
+          }
+          if (!signedInUser) {
+            const provider = new GoogleAuthProvider();
+            const signInResult = await signInWithPopup(auth, provider);
+            signedInUser = signInResult.user;
           }
 
           const parentProfileSnapshot = await getDoc(doc(db, 'users', signedInUser.uid));
