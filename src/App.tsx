@@ -209,6 +209,10 @@ const AppContent: React.FC = () => {
       setChildAcademicRecord(null);
     }
 
+    // Portal-code/demo sessions resolve only from their exact local record. Do not query Firestore
+    // using a possibly unrelated Firebase session.
+    if (!auth.currentUser || profileData.uid.startsWith('parent-') || profileData.uid.startsWith('demo-')) return;
+
     // Firestore is authoritative. Never substitute another child or invented grades.
     const studentsQuery = query(collection(db, 'students'), where('parentId', '==', targetParentId), limit(1));
     const unsubscribeChildStudent = onSnapshot(studentsQuery, (snapshot) => {
@@ -253,6 +257,9 @@ const AppContent: React.FC = () => {
     } catch {
       setStudentAcademicRecord(null);
     }
+
+    // Portal-code/demo sessions use the exact local cache; don't query with an unrelated auth session.
+    if (!auth.currentUser || profileData.uid.startsWith('student-') || profileData.uid.startsWith('demo-')) return;
 
     const q = query(collection(db, 'students'), where('studentId', '==', currentStudentId), limit(1));
     const unsubscribe = onSnapshot(q, (snapshot) => {
