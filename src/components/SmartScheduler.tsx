@@ -156,6 +156,11 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
     setCurrentSchedule(null);
     setQuizResults({});
     setActiveScheduleId(null);
+    setActiveQuiz(null);
+    setViewingScheduleId(null);
+    setPastedSyllabus('');
+    setRescheduleReason('');
+    setIsRescheduling(false);
   };
 
   const handleAiError = (error: any) => {
@@ -349,7 +354,16 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
 
   // Track auth changes explicitly; effects must resubscribe after sign-in/sign-out.
   useEffect(() => onAuthStateChanged(auth, user => {
-    setAuthenticatedUid(user?.uid ?? null);
+    const nextUid = user?.uid ?? null;
+    setAuthenticatedUid(previousUid => {
+      if (previousUid !== nextUid) {
+        setSchedulesHistory([]);
+        setActiveScheduleId(null);
+        setCurrentSchedule(null);
+        setMessages([WELCOME_MESSAGE(activeConversationId)]);
+      }
+      return nextUid;
+    });
     if (!user) {
       setSchedulesHistory([]);
       setActiveScheduleId(null);
@@ -365,6 +379,7 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
     const q = query(
       collection(db, path),
       where('conversationId', '==', activeConversationId),
+      orderBy('createdAt', 'asc'),
       limit(200)
     );
     const unsubscribe = onSnapshot(q, snapshot => {
@@ -494,8 +509,8 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
     setTimelineInput(item.timeline);
     if (item.syllabus) {
       setExtractedSyllabus(item.syllabus);
-    } else if (item.syllabusPreview) {
-      setExtractedSyllabus(item.syllabusPreview);
+    } else {
+      setExtractedSyllabus('');
     }
     setShowHistory(false);
   };
