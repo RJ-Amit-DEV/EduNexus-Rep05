@@ -25,7 +25,7 @@ import {
   Youtube
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
 import { cn } from '../lib/utils';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -87,16 +87,17 @@ const WELCOME_MESSAGE = (conversationId: string): Message => ({
   conversationId
 });
 
-let genAIInstance: GoogleGenAI | null = null;
-const getGenAI = (): GoogleGenAI => {
-  if (!genAIInstance) {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      throw new Error("GEMINI_API_KEY is not configured in the environment.");
-    }
-    genAIInstance = new GoogleGenAI({ apiKey: key });
-  }
-  return genAIInstance;
+const generateAIContent = async (request: { contents: unknown; config: Record<string, unknown> }) => {
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error('Please sign in to use Smart AI Scheduler.');
+  const response = await fetch('/api/generate-content', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(request)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || `AI request failed (${response.status}).`);
+  return result as { text: string };
 };
 
 export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery = '' }) => {
@@ -199,8 +200,7 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
       
       Generate a REAL, detailed study schedule based EXCLUSIVELY on the syllabus text.`;
 
-      const response = await getGenAI().models.generateContent({
-        model: "gemini-3.8-flash",
+      const response = await generateAIContent({
         contents: [{
           role: 'user',
           parts: [{ text: prompt }]
@@ -294,8 +294,7 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
   const takeQuiz = async (item: ScheduleItem) => {
     setIsLoading(true);
     try {
-      const response = await getGenAI().models.generateContent({
-        model: "gemini-3.8-flash",
+      const response = await generateAIContent({
         contents: [{
           role: 'user',
           parts: [{
@@ -614,8 +613,7 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
   const extractModules = async (text: string, customMessage?: string) => {
     setIsLoading(true);
     try {
-      const response = await getGenAI().models.generateContent({
-        model: "gemini-3.8-flash",
+      const response = await generateAIContent({
         contents: [{
           role: 'user',
           parts: [{
@@ -718,8 +716,7 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
     await saveMessage(userMessage);
 
     try {
-      const response = await getGenAI().models.generateContent({
-        model: "gemini-3.8-flash",
+      const response = await generateAIContent({
         contents: [{
           role: 'user',
           parts: [{
@@ -944,9 +941,8 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
         }
 
         // Check relevance first
-        const relevanceCheck = await getGenAI().models.generateContent({
-          model: "gemini-3.8-flash",
-          contents: [{
+        const relevanceCheck = await generateAIContent({
+            contents: [{
             role: 'user',
             parts: [{ text: `Is the following text related to academic study, a syllabus, or a learning schedule? Answer only 'YES' or 'NO'.\n\nText: ${currentInput.substring(0, 1000)}` }]
           }],
@@ -1007,7 +1003,7 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
       Timeline: ${timeline}.
       Please provide an updated schedule in the same tabular JSON format.`;
       
-      const response = await getGenAI().models.generateContent({
+      const response = await generateAIContent({
         model,
         contents: prompt,
         config: {
