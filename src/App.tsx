@@ -33,8 +33,7 @@ import { handleFirestoreError, OperationType } from './lib/firestore-errors';
 import { 
   DEFAULT_TEACHER_CLASS_CODE, 
   generateStudentId, 
-  generateParentId, 
-  deriveStudentIdFromParentId 
+  generateParentId 
 } from './lib/id-generator';
 import { collection, onSnapshot, query, where, orderBy, limit, doc, getDoc, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { 
@@ -663,8 +662,6 @@ const AppContent: React.FC = () => {
         if (selectedRole === 'parent') {
           const pName = payload.name || 'Parent Guardian';
           const pId = payload.parentId || 'PAR-4042';
-          const derivedSId = payload.studentId || deriveStudentIdFromParentId(pId);
-
           let matchedStudents: Student[] = [];
           try {
             const cachedStr = localStorage.getItem('eduplan_local_students');
