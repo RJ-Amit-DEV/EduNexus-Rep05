@@ -348,14 +348,16 @@ const AppContent: React.FC = () => {
               if (parsed.uid === 'demo-parent-01') {
                 setChildAcademicRecord({
                   rollNo: 'INFTT-1-042', studentId: 'STU-4042', parentId: 'PAR-4042',
-                  name: 'Aarav Sharma', sem4: '9.24', ia1: 19, ia2: 18, attendance: 92,
+                  name: 'Aarav Sharma', sem4: '9.24',
+                  cgpa: '9.24', ia1: 19, ia2: 18, attendance: 92,
                   quizPass: 88, batch: 'INFTT-1', college: 'Institute of Engineering & Technology',
                   course: 'B.E. Information Technology'
                 });
               } else if (parsed.uid === 'demo-student-01') {
                 setStudentAcademicRecord({
                   rollNo: 'INFTT-1-042', studentId: 'STU-4042', parentId: 'PAR-4042',
-                  name: 'Aarav Sharma', sem4: '9.24', ia1: 19, ia2: 18, attendance: 92,
+                  name: 'Aarav Sharma', sem4: '9.24',
+                  cgpa: '9.24', ia1: 19, ia2: 18, attendance: 92,
                   quizPass: 88, batch: 'INFTT-1', college: 'Institute of Engineering & Technology',
                   course: 'B.E. Information Technology'
                 });
@@ -630,6 +632,7 @@ const AppContent: React.FC = () => {
             rollNo: sRoll,
             name: sName,
             sem4: "9.24",
+            cgpa: "9.24",
             ia1: 19,
             ia2: 18,
             attendance: 92,
@@ -926,6 +929,7 @@ const AppContent: React.FC = () => {
         parentId: "PAR-4042",
         name: "Aarav Sharma",
         sem4: "9.24",
+            cgpa: "9.24",
         ia1: 19,
         ia2: 18,
         attendance: 92,
@@ -954,6 +958,7 @@ const AppContent: React.FC = () => {
         rollNo: "INFTT-1-042",
         name: "Aarav Sharma",
         sem4: "9.24",
+            cgpa: "9.24",
         ia1: 19,
         ia2: 18,
         attendance: 92,
