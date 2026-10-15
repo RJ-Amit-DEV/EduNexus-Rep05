@@ -60,7 +60,7 @@ import { cn } from '../lib/utils';
 import * as XLSX from 'xlsx';
 import { db, auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, query, orderBy, updateDoc, doc, setDoc, getDocs, addDoc, deleteDoc, serverTimestamp, writeBatch, limit, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, updateDoc, doc, setDoc, addDoc, deleteDoc, serverTimestamp, where } from 'firebase/firestore';
 import { ConsistencyData, Student } from '../types';
 import { Notice } from './NoticeBoard';
 import { DEFAULT_TEACHER_CLASS_CODE, generateStudentId, generateParentId } from '../lib/id-generator';
