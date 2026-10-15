@@ -541,7 +541,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Sem 4 SGPI</label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">CGPA</label>
                     <input 
                       type="text" 
                       value={newStudent.sem4}
@@ -721,7 +721,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 <th className="px-3 py-3">Student Name</th>
                 <th className="px-3 py-3">Student ID</th>
                 <th className="px-3 py-3">Parent Access ID</th>
-                <th className="px-3 py-3">Sem 4 SGPI</th>
+                <th className="px-3 py-3">CGPA</th>
                 <th className="px-3 py-3">Attendance</th>
                 <th className="px-3 py-3">Quiz %</th>
                 <th className="px-3 py-3">IA-1</th>
@@ -1291,7 +1291,7 @@ export const ParentDashboard: React.FC<{
   // Safe access to marks
   const ia1 = displayChild.ia1 ?? 0;
   const ia2 = displayChild.ia2 ?? 0;
-  const sem4 = displayChild.sem4 ?? 0;
+  const sem4 = displayChild.cgpa ?? displayChild.sem4 ?? '—';
   const attendanceVal = displayChild.attendance ?? 0;
   const quizPassVal = displayChild.quizPass ?? 0;
 
@@ -1682,7 +1682,7 @@ export const ParentDashboard: React.FC<{
           <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-xs">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-5">
               <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                University Semester Progression (SGPI)
+                Cumulative Grade Point Average (CGPA)
               </h4>
               <TrendingUp className="text-emerald-500" size={18} />
             </div>
@@ -1691,7 +1691,7 @@ export const ParentDashboard: React.FC<{
                 <span className="text-2xl font-bold font-mono text-white">{sem4}</span>
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-white">Semester 4 Grade Point Average</p>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Cumulative Grade Point Average</p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Based on credit calculation under University of Mumbai curriculum standard.</p>
                 <p className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-semibold mt-1">Status: Regular Progression</p>
               </div>
