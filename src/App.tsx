@@ -745,7 +745,7 @@ const AppContent: React.FC = () => {
 
       const userDoc = await getDoc(doc(db, 'users', loggedInUser.uid));
       if (!userDoc.exists()) {
-        const initialStudentId = selectedRole === 'student' ? generateStudentId() : undefined;
+        const initialStudentId = undefined;
         const initialProfile: ProfileData = {
           uid: loggedInUser.uid,
           name: loggedInUser.displayName || 'New User',
