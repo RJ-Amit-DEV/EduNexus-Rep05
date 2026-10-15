@@ -84,12 +84,12 @@ const generateInitialStudents = (): Student[] => {
       parentId: `PAR-${studentNum}`,
       classCode: DEFAULT_TEACHER_CLASS_CODE,
       rollNo: `INFTT-1-${i.toString().padStart(3, '0')}`,
-      name: `${firstName} ${lastName}`,
-      sem4: (Math.random() * (10 - 6) + 6).toFixed(2),
-      ia1: Math.floor(Math.random() * 21),
-      ia2: Math.floor(Math.random() * 21),
-      attendance: Math.floor(Math.random() * 41) + 60, // 60-100%
-      quizPass: Math.floor(Math.random() * 31) + 70,   // 70-100%
+      name: i === 42 ? "Aarav Sharma" : `${firstName} ${lastName}`,
+      sem4: i === 42 ? "9.24" : (Math.random() * (10 - 6) + 6).toFixed(2),
+      ia1: i === 42 ? 19 : Math.floor(Math.random() * 21),
+      ia2: i === 42 ? 18 : Math.floor(Math.random() * 21),
+      attendance: i === 42 ? 92 : Math.floor(Math.random() * 41) + 60, // 60-100%
+      quizPass: i === 42 ? 88 : Math.floor(Math.random() * 31) + 70,
       batch: "INFTT-1",
       college: "Institute of Engineering & Technology",
       course: "B.E. Information Technology"
@@ -1461,8 +1461,8 @@ export const ParentDashboard: React.FC<{
     ? displayChild.name.split(' ')[0] 
     : "Your child";
 
-  const resolvedStudentId = displayChild.studentId || studentId || 'STU-4042';
-  const resolvedParentId = displayChild.parentId || parentId || 'PAR-4042';
+  const resolvedStudentId = displayChild.studentId || studentId || 'Not linked';
+  const resolvedParentId = displayChild.parentId || parentId || 'Not linked';
 
   return (
     <div className="p-6 md:p-8 space-y-6 max-w-[1400px] mx-auto font-sans">
@@ -1478,10 +1478,10 @@ export const ParentDashboard: React.FC<{
               </>
             )}
             <span>•</span>
-            <span className="text-indigo-600 dark:text-indigo-400 font-bold">Roll No: {displayChild.rollNo || 'INFTT-1-042'}</span>
+            <span className="text-indigo-600 dark:text-indigo-400 font-bold">Roll No: {displayChild.rollNo || 'Not available'}</span>
             <span>•</span>
             <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-              Class: {displayChild.classCode || 'CLS-4921'}
+              Class: {displayChild.classCode || 'Not available'}
             </span>
           </div>
 
