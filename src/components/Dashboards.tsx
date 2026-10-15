@@ -85,7 +85,7 @@ const generateInitialStudents = (): Student[] => {
       classCode: DEFAULT_TEACHER_CLASS_CODE,
       rollNo: `INFTT-1-${i.toString().padStart(3, '0')}`,
       name: i === 42 ? "Aarav Sharma" : `${firstName} ${lastName}`,
-      sem4: i === 42 ? "9.24" : (Math.random() * (10 - 6) + 6).toFixed(2),
+      cgpa: i === 42 ? "9.24" : (Math.random() * (10 - 6) + 6).toFixed(2),
       ia1: i === 42 ? 19 : Math.floor(Math.random() * 21),
       ia2: i === 42 ? 18 : Math.floor(Math.random() * 21),
       attendance: i === 42 ? 92 : Math.floor(Math.random() * 41) + 60, // 60-100%
@@ -141,14 +141,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [students, setStudents] = useState<Student[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editStudent, setEditStudent] = useState({ name: '', rollNo: '', sem4: '', ia1: 0, ia2: 0, attendance: 0, quizPass: 0 });
+  const [editStudent, setEditStudent] = useState({ name: '', rollNo: '', cgpa: '', ia1: 0, ia2: 0, attendance: 0, quizPass: 0 });
   const [classCodeCopied, setClassCodeCopied] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [newStudent, setNewStudent] = useState({
     name: '',
     rollNo: '',
-    sem4: '9.20',
+    cgpa: '9.20',
     ia1: 18,
     ia2: 17,
     attendance: 92,
@@ -180,7 +180,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 parentId: 'PAR-4042',
                 rollNo: 'INFTT-1-042',
                 name: 'Aarav Sharma',
-                sem4: '9.24',
+                cgpa: '9.24',
                 ia1: 19,
                 ia2: 18,
                 attendance: 92,
@@ -246,7 +246,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       await updateDoc(doc(db, 'students', id), {
         name: editStudent.name,
         rollNo: editStudent.rollNo,
-        sem4: editStudent.sem4,
+        cgpa: editStudent.cgpa,
         ia1: editStudent.ia1,
         ia2: editStudent.ia2,
         attendance: editStudent.attendance,
@@ -274,7 +274,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       classCode: assignedClassCode,
       name: newStudent.name.trim(),
       rollNo: newStudent.rollNo.trim().toUpperCase(),
-      sem4: newStudent.sem4 || "9.00",
+      cgpa: newStudent.cgpa || "9.00",
       ia1: Number(newStudent.ia1) || 18,
       ia2: Number(newStudent.ia2) || 17,
       attendance: Number(newStudent.attendance) || 90,
@@ -301,7 +301,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     setNewStudent({
       name: '',
       rollNo: '',
-      sem4: '9.20',
+      cgpa: '9.20',
       ia1: 18,
       ia2: 17,
       attendance: 92,
@@ -373,7 +373,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
   // Metrics calculations
   const totalStudents = students.length || 1;
-  const avgSem4 = (students.reduce((acc, s) => acc + parseFloat(s.sem4 || '0'), 0) / totalStudents).toFixed(2);
+  const avgSem4 = (students.reduce((acc, s) => acc + parseFloat(s.cgpa || '0'), 0) / totalStudents).toFixed(2);
   const avgIa1 = (students.reduce((acc, s) => acc + (s.ia1 || 0), 0) / totalStudents).toFixed(1);
   const avgIa2 = (students.reduce((acc, s) => acc + (s.ia2 || 0), 0) / totalStudents).toFixed(1);
   const ia1PassCount = students.filter(s => (s.ia1 || 0) >= 8).length;
@@ -544,8 +544,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">CGPA</label>
                     <input 
                       type="text" 
-                      value={newStudent.sem4}
-                      onChange={(e) => setNewStudent({ ...newStudent, sem4: e.target.value })}
+                      value={newStudent.cgpa}
+                      onChange={(e) => setNewStudent({ ...newStudent, cgpa: e.target.value })}
                       placeholder="9.20"
                       className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                     />
@@ -813,12 +813,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       {isEditing ? (
                         <input 
                           type="text" 
-                          value={editStudent.sem4}
-                          onChange={(e) => setEditStudent({ ...editStudent, sem4: e.target.value })}
+                          value={editStudent.cgpa}
+                          onChange={(e) => setEditStudent({ ...editStudent, cgpa: e.target.value })}
                           className="w-16 px-2 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-xs font-mono"
                         />
                       ) : (
-                        student.sem4
+                        student.cgpa
                       )}
                     </td>
 
@@ -942,7 +942,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                               setEditStudent({ 
                                 name: student.name, 
                                 rollNo: student.rollNo, 
-                                sem4: student.sem4, 
+                                cgpa: student.cgpa, 
                                 ia1: student.ia1, 
                                 ia2: student.ia2,
                                 attendance: student.attendance || 0,
@@ -1274,7 +1274,7 @@ export const ParentDashboard: React.FC<{
   // Safe access to marks
   const ia1 = displayChild.ia1 ?? 0;
   const ia2 = displayChild.ia2 ?? 0;
-  const sem4 = displayChild.sem4 ?? 0;
+  const cgpa = displayChild.cgpa ?? 0;
   const attendanceVal = displayChild.attendance ?? 0;
   const quizPassVal = displayChild.quizPass ?? 0;
 
@@ -1671,7 +1671,7 @@ export const ParentDashboard: React.FC<{
             </div>
             <div className="flex items-center gap-5 p-4 bg-slate-50 dark:bg-slate-800/60 rounded border border-slate-200 dark:border-slate-800">
               <div className="w-16 h-16 bg-slate-900 dark:bg-slate-800 rounded border border-slate-700 flex items-center justify-center shrink-0">
-                <span className="text-2xl font-bold font-mono text-white">{sem4}</span>
+                <span className="text-2xl font-bold font-mono text-white">{cgpa}</span>
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-900 dark:text-white">Cumulative Grade Point Average</p>
