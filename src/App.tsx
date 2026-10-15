@@ -342,9 +342,24 @@ const AppContent: React.FC = () => {
               setIsLoggedIn(true);
               setShowRoleSelection(false);
               setIsLoading(false);
-              // Role-specific sync effects resolve records by exact IDs; never inject a default child's grades.
+              // Restore only the explicitly labelled demo fixtures. Real portal sessions resolve by exact IDs.
               setChildAcademicRecord(null);
               setStudentAcademicRecord(null);
+              if (parsed.uid === 'demo-parent-01') {
+                setChildAcademicRecord({
+                  rollNo: 'INFTT-1-042', studentId: 'STU-4042', parentId: 'PAR-4042',
+                  name: 'Aarav Sharma', sem4: '9.24', ia1: 19, ia2: 18, attendance: 92,
+                  quizPass: 88, batch: 'INFTT-1', college: 'Institute of Engineering & Technology',
+                  course: 'B.E. Information Technology'
+                });
+              } else if (parsed.uid === 'demo-student-01') {
+                setStudentAcademicRecord({
+                  rollNo: 'INFTT-1-042', studentId: 'STU-4042', parentId: 'PAR-4042',
+                  name: 'Aarav Sharma', sem4: '9.24', ia1: 19, ia2: 18, attendance: 92,
+                  quizPass: 88, batch: 'INFTT-1', college: 'Institute of Engineering & Technology',
+                  course: 'B.E. Information Technology'
+                });
+              }
               return;
             }
           } catch (e) {
