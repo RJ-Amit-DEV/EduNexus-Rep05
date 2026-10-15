@@ -170,7 +170,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         const localCached = localStorage.getItem('eduplan_local_students');
         if (localCached) {
           try {
-            const cachedStudents: Student[] = JSON.parse(localCached);
+            const cachedStudents: Student[] = (JSON.parse(localCached) as Student[]).map(student => ({ ...student, cgpa: student.cgpa ?? student.sem4 ?? '' }));
             // Migrate the explicitly seeded demo row so PAR-4042 always identifies the advertised demo child.
             const demoIndex = cachedStudents.findIndex(s => s.id === 'student-initial-42');
             if (demoIndex >= 0) {
@@ -214,6 +214,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           seenIds.add(uniqueId);
           studentData.push({
             ...data,
+            cgpa: data.cgpa ?? data.sem4 ?? '',
             id: uniqueId
           } as Student);
         });
@@ -1274,7 +1275,7 @@ export const ParentDashboard: React.FC<{
   // Safe access to marks
   const ia1 = displayChild.ia1 ?? 0;
   const ia2 = displayChild.ia2 ?? 0;
-  const cgpa = displayChild.cgpa ?? 0;
+  const cgpa = displayChild.cgpa ?? displayChild.sem4 ?? '—';
   const attendanceVal = displayChild.attendance ?? 0;
   const quizPassVal = displayChild.quizPass ?? 0;
 
