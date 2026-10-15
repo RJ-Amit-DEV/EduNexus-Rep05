@@ -765,10 +765,11 @@ const AppContent: React.FC = () => {
           studentId: initialStudentId,
           parentId: initialStudentId ? generateParentId(initialStudentId) : undefined
         };
-        await setDoc(doc(db, 'users', loggedInUser.uid), {
-          ...initialProfile,
-          updatedAt: serverTimestamp()
-        });
+        const profileToSave = Object.fromEntries(
+          Object.entries({ ...initialProfile, updatedAt: serverTimestamp() })
+            .filter(([, value]) => value !== undefined)
+        );
+        await setDoc(doc(db, 'users', loggedInUser.uid), profileToSave);
         setProfileData(initialProfile);
         setRole(selectedRole);
       } else {
