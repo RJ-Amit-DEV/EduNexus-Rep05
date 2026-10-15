@@ -103,7 +103,7 @@ export const VisionBoard: React.FC<VisionBoardProps> = ({ isOpen, onClose }) => 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -116,11 +116,11 @@ export const VisionBoard: React.FC<VisionBoardProps> = ({ isOpen, onClose }) => 
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800"
+            className="relative my-auto w-full max-w-2xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] shadow-2xl border border-slate-200 dark:border-slate-800"
           >
-            <div className="p-8">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-2xl font-display font-black text-slate-900 dark:text-white">My Academic Goals</h2>
+            <div className="p-4 sm:p-6 md:p-8">
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <h2 className="text-xl sm:text-2xl font-display font-black text-slate-900 dark:text-white">My Academic Goals</h2>
                 <button 
                   onClick={onClose}
                   className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
@@ -136,7 +136,7 @@ export const VisionBoard: React.FC<VisionBoardProps> = ({ isOpen, onClose }) => 
               )}
 
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <div className="flex flex-col items-center justify-center py-12 sm:py-16 gap-4">
                   <motion.div 
                     animate={{ rotate: 360 }}
                     transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
@@ -145,7 +145,7 @@ export const VisionBoard: React.FC<VisionBoardProps> = ({ isOpen, onClose }) => 
                   <p className="text-slate-400 text-xs font-black uppercase tracking-widest animate-pulse">Gathering your dreams...</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[55vh] overflow-y-auto pr-4 custom-scrollbar">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 md:max-h-none overflow-visible pr-0 custom-scrollbar">
                   <GoalCard 
                     icon={<Calendar size={20} />} 
                     title="Today's Mission" 
@@ -191,7 +191,7 @@ export const VisionBoard: React.FC<VisionBoardProps> = ({ isOpen, onClose }) => 
                 </div>
               )}
 
-              <div className="mt-10 pt-8 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-8">
+              <div className="mt-5 sm:mt-8 pt-5 sm:pt-6 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-4 sm:gap-6">
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -200,7 +200,7 @@ export const VisionBoard: React.FC<VisionBoardProps> = ({ isOpen, onClose }) => 
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-900 px-4 py-1 rounded-full border border-slate-100 dark:border-slate-800">
                     <Trophy size={16} className="text-amber-500" />
                   </div>
-                  <p className="text-xl font-display font-black text-slate-900 dark:text-white leading-tight tracking-tight mb-2">
+                  <p className="text-base sm:text-xl font-display font-black text-slate-900 dark:text-white leading-tight tracking-tight mb-2">
                     "Small aim is a crime; have a great aim."
                   </p>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">— Dr. APJ Abdul Kalam</p>
@@ -209,7 +209,7 @@ export const VisionBoard: React.FC<VisionBoardProps> = ({ isOpen, onClose }) => 
                 <button 
                   disabled={loading || saving}
                   onClick={handleSave}
-                  className="w-full py-5 bg-indigo-600 text-white font-display font-black rounded-2xl shadow-xl shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 group"
+                  className="w-full py-4 sm:py-5 bg-indigo-600 text-white font-display font-black rounded-2xl shadow-xl shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 group"
                 >
                   {saving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} className="group-hover:rotate-12 transition-transform" />}
                   MANIFEST MY VISION
