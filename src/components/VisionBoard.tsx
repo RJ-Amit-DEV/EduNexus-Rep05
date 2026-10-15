@@ -13,6 +13,7 @@ interface VisionBoardProps {
 export const VisionBoard: React.FC<VisionBoardProps> = ({ isOpen, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [goals, setGoals] = useState({
     day1: '',
     month1: '',
@@ -22,37 +23,64 @@ export const VisionBoard: React.FC<VisionBoardProps> = ({ isOpen, onClose }) => 
   });
 
   useEffect(() => {
-    if (isOpen && auth.currentUser) {
-      const fetchGoals = async () => {
-        setLoading(true);
-        try {
-          const docRef = doc(db, 'users', auth.currentUser!.uid, 'content', 'visionBoard');
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            setGoals(docSnap.data() as any);
-          }
-        } catch (error) {
-          console.error("Error fetching vision board:", error);
-        } finally {
-          setLoading(false);
+    if (!isOpen) return;
+
+    let cancelled = false;
+    const fetchGoals = async () => {
+      setLoading(true);
+      setErrorMessage(null);
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        setLoading(false);
+        setErrorMessage('Please sign in again to load and save your academic goals.');
+        return;
+      }
+
+      try {
+        const docRef = doc(db, 'users', currentUser.uid, 'content', 'visionBoard');
+        const docSnap = await getDoc(docRef);
+        if (!cancelled && docSnap.exists()) {
+          const data = docSnap.data();
+          setGoals({
+            day1: data.day1 ?? '',
+            month1: data.month1 ?? '',
+            year1: data.year1 ?? '',
+            year3: data.year3 ?? '',
+            skills: data.skills ?? ''
+          });
         }
-      };
-      fetchGoals();
-    }
+      } catch (error) {
+        console.error('Error fetching vision board:', error);
+        if (!cancelled) setErrorMessage('Could not load saved goals. Check your connection and permissions, then try saving again.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void fetchGoals();
+    return () => { cancelled = true; };
   }, [isOpen]);
 
   const handleSave = async () => {
-    if (!auth.currentUser) return;
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setErrorMessage('Your session has expired. Please sign in again before saving.');
+      return;
+    }
+
     setSaving(true);
+    setErrorMessage(null);
     try {
-      const docRef = doc(db, 'users', auth.currentUser.uid, 'content', 'visionBoard');
+      const docRef = doc(db, 'users', currentUser.uid, 'content', 'visionBoard');
       await setDoc(docRef, {
         ...goals,
         updatedAt: serverTimestamp()
       }, { merge: true });
       onClose();
     } catch (error) {
-      console.error("Error saving vision board:", error);
+      console.error('Error saving vision board:', error);
+      setErrorMessage('Could not save your goals. Please check your internet connection and Firestore permissions, then try again.');
     } finally {
       setSaving(false);
     }
@@ -86,6 +114,12 @@ export const VisionBoard: React.FC<VisionBoardProps> = ({ isOpen, onClose }) => 
                   <X size={24} className="text-slate-400" />
                 </button>
               </div>
+
+              {errorMessage && (
+                <div role="alert" className="mb-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300">
+                  {errorMessage}
+                </div>
+              )}
 
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-4">
