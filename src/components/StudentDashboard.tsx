@@ -362,7 +362,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
             <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">CGPA</p>
             <p className="text-lg font-bold font-mono text-slate-900 dark:text-white mt-0.5">
-              {academicRecord?.sem4 || '—'}
+              {academicRecord?.cgpa || '—'}
             </p>
           </div>
           <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
