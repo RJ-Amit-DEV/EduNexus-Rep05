@@ -85,7 +85,7 @@ const generateInitialStudents = (): Student[] => {
       classCode: DEFAULT_TEACHER_CLASS_CODE,
       rollNo: `INFTT-1-${i.toString().padStart(3, '0')}`,
       name: i === 42 ? "Aarav Sharma" : `${firstName} ${lastName}`,
-      sem4: i === 42 ? "9.24" : (Math.random() * (10 - 6) + 6).toFixed(2),
+      cgpa: i === 42 ? "9.24" : (Math.random() * (10 - 6) + 6).toFixed(2),
       ia1: i === 42 ? 19 : Math.floor(Math.random() * 21),
       ia2: i === 42 ? 18 : Math.floor(Math.random() * 21),
       attendance: i === 42 ? 92 : Math.floor(Math.random() * 41) + 60, // 60-100%
@@ -141,14 +141,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [students, setStudents] = useState<Student[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editStudent, setEditStudent] = useState({ name: '', rollNo: '', sem4: '', ia1: 0, ia2: 0, attendance: 0, quizPass: 0 });
+  const [editStudent, setEditStudent] = useState({ name: '', rollNo: '', cgpa: '', ia1: 0, ia2: 0, attendance: 0, quizPass: 0 });
   const [classCodeCopied, setClassCodeCopied] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [newStudent, setNewStudent] = useState({
     name: '',
     rollNo: '',
-    sem4: '9.20',
+    cgpa: '9.20',
     ia1: 18,
     ia2: 17,
     attendance: 92,
@@ -170,7 +170,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         const localCached = localStorage.getItem('eduplan_local_students');
         if (localCached) {
           try {
-            const cachedStudents: Student[] = JSON.parse(localCached);
+            const cachedStudents: Student[] = (JSON.parse(localCached) as Student[]).map(student => ({ ...student, cgpa: student.cgpa ?? student.sem4 ?? '' }));
             // Migrate the explicitly seeded demo row so PAR-4042 always identifies the advertised demo child.
             const demoIndex = cachedStudents.findIndex(s => s.id === 'student-initial-42');
             if (demoIndex >= 0) {
@@ -180,7 +180,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 parentId: 'PAR-4042',
                 rollNo: 'INFTT-1-042',
                 name: 'Aarav Sharma',
-                sem4: '9.24',
+                cgpa: '9.24',
                 ia1: 19,
                 ia2: 18,
                 attendance: 92,
@@ -214,6 +214,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           seenIds.add(uniqueId);
           studentData.push({
             ...data,
+            cgpa: data.cgpa ?? data.sem4 ?? '',
             id: uniqueId
           } as Student);
         });
@@ -246,7 +247,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       await updateDoc(doc(db, 'students', id), {
         name: editStudent.name,
         rollNo: editStudent.rollNo,
-        sem4: editStudent.sem4,
+        cgpa: editStudent.cgpa,
         ia1: editStudent.ia1,
         ia2: editStudent.ia2,
         attendance: editStudent.attendance,
@@ -274,7 +275,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       classCode: assignedClassCode,
       name: newStudent.name.trim(),
       rollNo: newStudent.rollNo.trim().toUpperCase(),
-      sem4: newStudent.sem4 || "9.00",
+      cgpa: newStudent.cgpa || "9.00",
       ia1: Number(newStudent.ia1) || 18,
       ia2: Number(newStudent.ia2) || 17,
       attendance: Number(newStudent.attendance) || 90,
@@ -301,7 +302,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     setNewStudent({
       name: '',
       rollNo: '',
-      sem4: '9.20',
+      cgpa: '9.20',
       ia1: 18,
       ia2: 17,
       attendance: 92,
@@ -373,7 +374,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
   // Metrics calculations
   const totalStudents = students.length || 1;
-  const avgSem4 = (students.reduce((acc, s) => acc + parseFloat(s.sem4 || '0'), 0) / totalStudents).toFixed(2);
+  const avgSem4 = (students.reduce((acc, s) => acc + parseFloat(s.cgpa || '0'), 0) / totalStudents).toFixed(2);
   const avgIa1 = (students.reduce((acc, s) => acc + (s.ia1 || 0), 0) / totalStudents).toFixed(1);
   const avgIa2 = (students.reduce((acc, s) => acc + (s.ia2 || 0), 0) / totalStudents).toFixed(1);
   const ia1PassCount = students.filter(s => (s.ia1 || 0) >= 8).length;
@@ -544,8 +545,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">CGPA</label>
                     <input 
                       type="text" 
-                      value={newStudent.sem4}
-                      onChange={(e) => setNewStudent({ ...newStudent, sem4: e.target.value })}
+                      value={newStudent.cgpa}
+                      onChange={(e) => setNewStudent({ ...newStudent, cgpa: e.target.value })}
                       placeholder="9.20"
                       className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                     />
@@ -813,12 +814,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       {isEditing ? (
                         <input 
                           type="text" 
-                          value={editStudent.sem4}
-                          onChange={(e) => setEditStudent({ ...editStudent, sem4: e.target.value })}
+                          value={editStudent.cgpa}
+                          onChange={(e) => setEditStudent({ ...editStudent, cgpa: e.target.value })}
                           className="w-16 px-2 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-xs font-mono"
                         />
                       ) : (
-                        student.sem4
+                        student.cgpa
                       )}
                     </td>
 
@@ -942,7 +943,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                               setEditStudent({ 
                                 name: student.name, 
                                 rollNo: student.rollNo, 
-                                sem4: student.sem4, 
+                                cgpa: student.cgpa, 
                                 ia1: student.ia1, 
                                 ia2: student.ia2,
                                 attendance: student.attendance || 0,
@@ -1223,7 +1224,8 @@ export const ParentDashboard: React.FC<{
   parentId?: string;
   studentId?: string;
   onSwitchParentId?: (id: string) => void;
-}> = ({ childData, activeTab = 'performance', searchQuery = '', parentName, parentId, studentId, onSwitchParentId }) => {
+  allowDemoLinking?: boolean;
+}> = ({ childData, activeTab = 'performance', searchQuery = '', parentName, parentId, studentId, onSwitchParentId, allowDemoLinking = false }) => {
   const [switchInput, setSwitchInput] = useState('');
   const [switchError, setSwitchError] = useState<string | null>(null);
 
@@ -1243,45 +1245,27 @@ export const ParentDashboard: React.FC<{
         <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mb-6 text-indigo-600">
           <KeyRound size={32} />
         </div>
-        <h2 className="text-2xl font-display font-black text-slate-900 dark:text-white mb-2">No Ward Record Linked</h2>
+        <h2 className="text-2xl font-display font-black text-slate-900 dark:text-white mb-2">No Verified Student Link</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-          Please enter the auto-generated <strong>Parent Access ID (PAR-XXXX)</strong> provided by your child's teacher or student portal.
+          Academic records are visible only after the institution verifies this parent account and links it to the correct student. A Parent Access ID by itself is not proof of identity.
         </p>
-
-        <form onSubmit={handleSwitchSubmit} className="flex items-center gap-2 w-full">
-          <input 
-            type="text"
-            value={switchInput}
-            onChange={(e) => setSwitchInput(e.target.value.toUpperCase())}
-            placeholder="e.g. PAR-4042"
-            className="flex-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-sm uppercase text-slate-900 dark:text-white outline-none focus:border-indigo-500"
-          />
-          <button
-            type="submit"
-            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl cursor-pointer"
-          >
-            Link Ward
-          </button>
-        </form>
-
-        <div className="flex items-center gap-2 mt-4 text-xs text-slate-400">
-          <span>Try Demo:</span>
-          <button 
-            type="button" 
-            onClick={() => onSwitchParentId && onSwitchParentId('PAR-4042')}
-            className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
-          >
-            PAR-4042 (Aarav Sharma)
-          </button>
-          <span>•</span>
-          <button 
-            type="button" 
-            onClick={() => onSwitchParentId && onSwitchParentId('PAR-4001')}
-            className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
-          >
-            PAR-4001
-          </button>
-        </div>
+        {allowDemoLinking && (
+          <>
+            <form onSubmit={handleSwitchSubmit} className="flex items-center gap-2 w-full">
+              <input
+                type="text"
+                value={switchInput}
+                onChange={(e) => setSwitchInput(e.target.value.toUpperCase())}
+                placeholder="Demo Parent Access ID"
+                className="flex-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-sm uppercase text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+              />
+              <button type="submit" className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl cursor-pointer">
+                Load Demo
+              </button>
+            </form>
+            {switchError && <p role="alert" className="text-sm text-rose-600 mt-3">{switchError}</p>}
+          </>
+        )}
       </div>
     );
   }
@@ -1291,7 +1275,7 @@ export const ParentDashboard: React.FC<{
   // Safe access to marks
   const ia1 = displayChild.ia1 ?? 0;
   const ia2 = displayChild.ia2 ?? 0;
-  const sem4 = displayChild.sem4 ?? 0;
+  const cgpa = displayChild.cgpa ?? displayChild.sem4 ?? '—';
   const attendanceVal = displayChild.attendance ?? 0;
   const quizPassVal = displayChild.quizPass ?? 0;
 
@@ -1519,54 +1503,27 @@ export const ParentDashboard: React.FC<{
           </div>
         </div>
 
-        {/* Quick Ward ID Switcher */}
-        <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 max-w-sm w-full">
-          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-            <span>Switch Linked Ward</span>
-            <span className="text-[9px] text-indigo-500 lowercase font-mono">PAR-XXXX</span>
-          </p>
-          <form onSubmit={handleSwitchSubmit} className="flex items-center gap-2">
-            <input 
-              type="text"
-              value={switchInput}
-              onChange={(e) => setSwitchInput(e.target.value.toUpperCase())}
-              placeholder="e.g. PAR-4001"
-              className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
-            />
-            <button
-              type="submit"
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
-            >
-              Lookup
-            </button>
-          </form>
-          <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-400">
-            <span>Quick:</span>
-            <button 
-              type="button" 
-              onClick={() => onSwitchParentId && onSwitchParentId('PAR-4042')}
-              className="text-indigo-500 hover:underline cursor-pointer font-mono"
-            >
-              PAR-4042
-            </button>
-            <span>•</span>
-            <button 
-              type="button" 
-              onClick={() => onSwitchParentId && onSwitchParentId('PAR-4001')}
-              className="text-indigo-500 hover:underline cursor-pointer font-mono"
-            >
-              PAR-4001
-            </button>
-            <span>•</span>
-            <button 
-              type="button" 
-              onClick={() => onSwitchParentId && onSwitchParentId('PAR-4002')}
-              className="text-indigo-500 hover:underline cursor-pointer font-mono"
-            >
-              PAR-4002
-            </button>
+        {allowDemoLinking && (
+          <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 max-w-sm w-full">
+            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+              Demo Ward Selector
+            </p>
+            <form onSubmit={handleSwitchSubmit} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={switchInput}
+                onChange={(e) => setSwitchInput(e.target.value.toUpperCase())}
+                placeholder="Demo Parent Access ID"
+                className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
+              />
+              <button type="submit" className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all cursor-pointer">
+                Load Demo
+              </button>
+            </form>
+            {switchError && <p role="alert" className="text-xs text-rose-600 mt-2">{switchError}</p>}
+            <p className="text-[10px] text-slate-400 mt-2">Demo data only. Real parent accounts cannot switch children using an access code.</p>
           </div>
-        </div>
+        )}
       </div>
 
 
@@ -1688,7 +1645,7 @@ export const ParentDashboard: React.FC<{
             </div>
             <div className="flex items-center gap-5 p-4 bg-slate-50 dark:bg-slate-800/60 rounded border border-slate-200 dark:border-slate-800">
               <div className="w-16 h-16 bg-slate-900 dark:bg-slate-800 rounded border border-slate-700 flex items-center justify-center shrink-0">
-                <span className="text-2xl font-bold font-mono text-white">{sem4}</span>
+                <span className="text-2xl font-bold font-mono text-white">{cgpa}</span>
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-900 dark:text-white">Cumulative Grade Point Average</p>

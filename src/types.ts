@@ -50,7 +50,9 @@ export interface Student {
   classCode: string;       // Teacher's class code e.g. CLS-4921
   rollNo: string;
   name: string;
-  sem4: string;
+  cgpa: string;
+  /** @deprecated Legacy Firestore field; migrate reads to cgpa. */
+  sem4?: string;
   ia1: number;
   ia2: number;
   attendance: number;
