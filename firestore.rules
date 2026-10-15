@@ -34,9 +34,20 @@ service cloud.firestore {
       // Authenticated institutional users can view profiles (for directory, doubt solver, mentor lookup)
       allow read: if isAuthenticated();
       
-      // Users can manage their own profile; Superusers have full admin access
-      allow create, update: if isAuthenticated() && (isOwner(userId) || isSuperUser());
-      allow delete: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+      // Parent-child and role bindings are institution-managed identity fields.
+      // A user cannot create a parent account or edit their own role/link to another child.
+      allow create: if isSuperUser() || (
+        isOwner(userId) && request.resource.data.get('role', null) != 'parent'
+      );
+      allow update: if isSuperUser() || (
+        isOwner(userId) &&
+        request.resource.data.get('role', null) == resource.data.get('role', null) &&
+        request.resource.data.get('parentId', null) == resource.data.get('parentId', null) &&
+        request.resource.data.get('childStudentId', null) == resource.data.get('childStudentId', null) &&
+        request.resource.data.get('studentId', null) == resource.data.get('studentId', null) &&
+        request.resource.data.get('classCode', null) == resource.data.get('classCode', null)
+      );
+      allow delete: if isSuperUser() || isOwner(userId);
 
       // User Deadlines Subcollection
       match /deadlines/{deadlineId} {
@@ -84,7 +95,11 @@ service cloud.firestore {
       allow read: if isSuperUser() || (
         isAuthenticated() && (
           (userProfile().role == 'teacher' && resource.data.classCode == userProfile().classCode) ||
-          (userProfile().role == 'parent' && resource.data.parentId == userProfile().parentId) ||
+          (userProfile().role == 'parent' &&
+            userProfile().parentId != null &&
+            userProfile().childStudentId != null &&
+            resource.data.parentId == userProfile().parentId &&
+            resource.data.studentId == userProfile().childStudentId) ||
           (userProfile().role == 'student' && resource.data.studentId == userProfile().studentId)
         )
       );
