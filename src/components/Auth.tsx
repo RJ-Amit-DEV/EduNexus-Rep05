@@ -110,7 +110,7 @@ export const Auth: React.FC<AuthProps> = ({
     if (!studentClassCode.trim()) return;
     
     // Auto generate Student ID and Paired Parent ID
-    const studentId = generateStudentId(4042);
+    const studentId = generateStudentId();
     const parentId = generateParentId(studentId);
 
     onLogin('student', {
