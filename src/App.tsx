@@ -1280,6 +1280,9 @@ const AppContent: React.FC = () => {
 
       {/* Role-Specific Action Hub (Global Floating Button) */}
       <motion.button
+        type="button"
+        aria-label={role === 'student' ? 'Open My Academic Goals' : role === 'parent' ? 'Contact Faculty' : 'Open Quick Broadcast'}
+        title={role === 'student' ? 'My Academic Goals' : role === 'parent' ? 'Contact Faculty' : 'Quick Broadcast'}
         whileHover={{ scale: 1.1, y: -5 }}
         whileTap={{ scale: 0.9 }}
         onClick={() => {
