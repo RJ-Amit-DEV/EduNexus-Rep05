@@ -379,7 +379,6 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
     const q = query(
       collection(db, path),
       where('conversationId', '==', activeConversationId),
-      orderBy('createdAt', 'asc'),
       limit(200)
     );
     const unsubscribe = onSnapshot(q, snapshot => {
