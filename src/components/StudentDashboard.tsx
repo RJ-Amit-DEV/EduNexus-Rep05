@@ -342,7 +342,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         >
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
             <span className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 rounded border border-indigo-200 dark:border-indigo-800">
-              {profileData?.rollNo || academicRecord?.rollNo || 'Roll No: INFTT-1-001'}
+              {profileData?.rollNo || academicRecord?.rollNo || 'Roll number not linked'}
             </span>
             <span>•</span>
             <span>{profileData?.course || academicRecord?.course || 'B.E. Information Technology'}</span>
@@ -374,7 +374,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
             <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">IA-1 Score</p>
             <p className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400 mt-0.5">
-              {academicRecord?.ia1 ?? 19}/20
+              {academicRecord?.ia1 ?? '—'}/20
             </p>
           </div>
         </div>
@@ -390,7 +390,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">Class Enrollment & Identity</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-semibold font-mono">
-                Class: {profileData?.classCode || academicRecord?.classCode || 'CLS-4921'}
+                Class: {profileData?.classCode || academicRecord?.classCode || 'Not linked'}
               </span>
             </div>
 
@@ -398,7 +398,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               {/* Student ID badge */}
               <div className="flex items-center gap-2 bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-700">
                 <span className="text-xs text-slate-400">Student ID:</span>
-                <span className="font-mono font-bold text-white text-sm">{profileData?.studentId || academicRecord?.studentId || 'STU-4042'}</span>
+                <span className="font-mono font-bold text-white text-sm">{profileData?.studentId || academicRecord?.studentId || 'Not linked'}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -408,6 +408,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   }}
                   className="text-indigo-400 hover:text-indigo-200 p-0.5 cursor-pointer ml-1"
                   title="Copy Student ID"
+                  disabled={!(profileData?.studentId || academicRecord?.studentId)}
                 >
                   {copiedKey === 'student' ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
                 </button>
@@ -417,7 +418,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               <div className="flex items-center gap-2 bg-emerald-950/50 px-3 py-1.5 rounded-xl border border-emerald-500/40">
                 <KeyRound size={14} className="text-emerald-400" />
                 <span className="text-xs text-emerald-200">Parent Access ID:</span>
-                <span className="font-mono font-bold text-emerald-300 text-sm">{profileData?.parentId || academicRecord?.parentId || 'PAR-4042'}</span>
+                <span className="font-mono font-bold text-emerald-300 text-sm">{profileData?.parentId || academicRecord?.parentId || 'Not linked'}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -427,6 +428,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   }}
                   className="text-emerald-400 hover:text-emerald-200 p-0.5 cursor-pointer ml-1"
                   title="Copy Parent Access ID to share with your guardian"
+                  disabled={!(profileData?.parentId || academicRecord?.parentId)}
                 >
                   {copiedKey === 'parent' ? <Check size={13} className="text-emerald-300" /> : <Copy size={13} />}
                 </button>
