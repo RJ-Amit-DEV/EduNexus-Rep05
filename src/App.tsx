@@ -944,14 +944,15 @@ const AppContent: React.FC = () => {
   };
 
   const handleRoleSwitch = async (newRole: UserRole) => {
-    const isPrivileged = isPrivilegedTeamMember(profileData.email) || profileData.isPrivileged || profileData.email?.includes('eduplan.local');
+    // Privilege must come from the trusted team-email allowlist, not editable client profile data.
+    const isPrivileged = isPrivilegedTeamMember(profileData.email);
     if (!isPrivileged) return;
 
     setRole(newRole);
     const updatedProfile = {
       ...profileData,
       role: newRole,
-      isPrivileged: true
+      isPrivileged: isPrivilegedTeamMember(profileData.email)
     };
     setProfileData(updatedProfile);
 
@@ -972,7 +973,7 @@ const AppContent: React.FC = () => {
     // Sync to Firestore if authenticated
     if (user) {
       try {
-        await setDoc(doc(db, 'users', user.uid), { role: newRole, isPrivileged: true, updatedAt: serverTimestamp() }, { merge: true });
+        await setDoc(doc(db, 'users', user.uid), { role: newRole, isPrivileged: isPrivilegedTeamMember(profileData.email), updatedAt: serverTimestamp() }, { merge: true });
       } catch (e) {
         console.warn("Could not sync role change to Firestore:", e);
       }
@@ -1023,19 +1024,17 @@ const AppContent: React.FC = () => {
         return; // User cancelled, ignore
       }
       console.error("Sign In Error:", error);
-      if (error.code === 'auth/unauthorized-domain' || error.code === 'auth/popup-blocked' || error.code === 'auth/operation-not-allowed') {
-        handleLogin('student', {
-          role: 'student',
-          name: 'Aarav Sharma',
-          classCode: DEFAULT_TEACHER_CLASS_CODE
-        });
-        return;
-      }
-      let message = "Unable to sign in with Google.";
-      if (error.message) {
-        message = error.message;
-      }
-      setAuthError(message);
+
+      // Never silently create a demo session when real Google authentication fails.
+      // Doing so makes failed authentication look successful and can expose the wrong
+      // demo profile. Show the actionable Firebase error instead.
+      const authMessages: Record<string, string> = {
+        'auth/unauthorized-domain': 'This site is not authorised for Firebase sign-in. Add the exact local hostname in Firebase Authentication settings.',
+        'auth/popup-blocked': 'Your browser blocked the Google sign-in popup. Allow popups for this site and try again.',
+        'auth/operation-not-allowed': 'Google sign-in is disabled for this Firebase project. Enable the Google provider in Firebase Authentication.',
+        'auth/popup-closed-by-user': 'Google sign-in was cancelled.'
+      };
+      setAuthError(authMessages[error.code] || error.message || 'Unable to sign in with Google. Please try again.');
     }
   };
 
