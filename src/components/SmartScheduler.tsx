@@ -1004,15 +1004,12 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
 
     setIsLoading(true);
     try {
-      const model = "gemini-3.8-flash";
-      
       const prompt = `Reschedule my current plan. 
       Reason for rescheduling: ${rescheduleReason}. 
       Timeline: ${timeline}.
       Please provide an updated schedule in the same tabular JSON format.`;
       
       const response = await generateAIContent({
-        model,
         contents: prompt,
         config: {
           systemInstruction: "You are a smart academic scheduler. Adjust the schedule based on the user's reason for rescheduling. Return a JSON object with 'message' and 'schedule' array.",
