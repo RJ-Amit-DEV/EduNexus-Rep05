@@ -404,7 +404,10 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!isLoggedIn) {
+    // Demo/team portal sessions may be local-only and have no Firebase Auth identity.
+    // Do not start Firestore listeners for those sessions; doing so creates predictable
+    // permission errors and misleading "using defaults" warnings.
+    if (!isLoggedIn || !auth.currentUser) {
       setNotices(DEFAULT_NOTICES);
       setMessages(DEFAULT_MESSAGES);
       setUnreadCounts({ notices: 0, doubts: 0 });
@@ -626,11 +629,17 @@ const AppContent: React.FC = () => {
             localStorage.setItem('eduplan_local_students', JSON.stringify(cachedList));
           } catch (e) {}
 
-          // Also persist into Firestore if accessible
-          try {
-            await setDoc(doc(db, 'students', `student-${sId}`), studentRecord, { merge: true });
-          } catch (e) {
-            console.warn("Could not save student to Firestore:", e);
+          // Demo portal enrollment is local-only. Persist to Firestore only when a
+          // real Firebase-authenticated account exists; otherwise security rules reject it.
+          if (auth.currentUser) {
+            try {
+              await setDoc(doc(db, 'students', `student-${sId}`), {
+                ...studentRecord,
+                createdByUid: auth.currentUser.uid
+              }, { merge: true });
+            } catch (e) {
+              console.warn("Could not save student to Firestore:", e);
+            }
           }
 
           const sProfile: ProfileData = {
