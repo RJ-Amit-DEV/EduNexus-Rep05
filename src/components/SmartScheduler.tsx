@@ -105,6 +105,7 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
   const [authenticatedUid, setAuthenticatedUid] = useState<string | null>(auth.currentUser?.uid ?? null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [schedulesHistory, setSchedulesHistory] = useState<ScheduleHistoryItem[]>([]);
+  const [historySaveError, setHistorySaveError] = useState<string | null>(null);
   const [activeScheduleId, setActiveScheduleId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [input, setInput] = useState('');
@@ -261,7 +262,34 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
       
       setCurrentSchedule(data.schedule);
       setAiStatus('online');
-      
+      setHistorySaveError(null);
+
+      // Persist the schedule before chat history. A chat-write failure must not
+      // prevent the generated plan from being saved to the student's history.
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setHistorySaveError('Your schedule was generated, but you are signed out. Sign in again to save it to history.');
+      } else {
+        try {
+          const path = `users/${currentUser.uid}/schedules`;
+          const docRef = await addDoc(collection(db, path), {
+            conversationId: activeConversationId,
+            subjectName: selectedModule || (finalChapters.length === 1 ? finalChapters[0] : '') || 'Study Schedule',
+            timeline: finalTimeline,
+            mode: finalMode,
+            schedule: data.schedule,
+            syllabus: extractedSyllabus.substring(0, 50000),
+            syllabusPreview: extractedSyllabus ? extractedSyllabus.substring(0, 300) : '',
+            syllabusLength: extractedSyllabus ? extractedSyllabus.length : 0,
+            createdAt: serverTimestamp()
+          });
+          setActiveScheduleId(docRef.id);
+        } catch (historyError) {
+          console.error('Unable to save generated schedule to history:', historyError);
+          setHistorySaveError('Your schedule was generated, but it could not be saved to history. Check your connection and Firestore permissions, then try again.');
+        }
+      }
+
       const assistantMessage: Message = {
         id: Date.now().toString(),
         role: 'assistant',
@@ -270,23 +298,11 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
         showScheduleButton: true,
         conversationId: activeConversationId
       };
-      await saveMessage(assistantMessage);
-
-      // Save to history (lean metadata to prevent unbounded payload reads)
-      if (auth.currentUser) {
-        const path = `users/${auth.currentUser.uid}/schedules`;
-        const docRef = await addDoc(collection(db, path), {
-          conversationId: activeConversationId,
-          subjectName: data.subjectName || 'Study Schedule',
-          timeline: finalTimeline,
-          mode: finalMode,
-          schedule: data.schedule,
-          syllabus: extractedSyllabus.substring(0, 50000),
-          syllabusPreview: extractedSyllabus ? extractedSyllabus.substring(0, 300) : '',
-          syllabusLength: extractedSyllabus ? extractedSyllabus.length : 0,
-          createdAt: serverTimestamp()
-        });
-        setActiveScheduleId(docRef.id);
+      try {
+        await saveMessage(assistantMessage);
+      } catch (messageError) {
+        // Schedule persistence is independent of optional conversation persistence.
+        console.error('Unable to save scheduler conversation message:', messageError);
       }
     } catch (error) {
       handleAiError(error);
@@ -1168,6 +1184,11 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {historySaveError && (
+                <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">
+                  {historySaveError}
+                </div>
+              )}
               <button 
                 onClick={resetAll}
                 className="w-full p-4 bg-white border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 hover:border-indigo-600 hover:text-indigo-600 transition-all flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest"
