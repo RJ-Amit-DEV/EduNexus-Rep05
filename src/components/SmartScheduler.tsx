@@ -719,9 +719,24 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
           conversationId: activeConversationId
         };
         await saveMessage(assistantMessage);
+      } else {
+        await saveMessage({
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: 'I could not identify any chapters or modules in that text. Please paste the detailed syllabus with unit/chapter headings, or upload the syllabus PDF, then try again.',
+          conversationId: activeConversationId
+        });
       }
     } catch (error) {
+      handleAiError(error);
       console.error("Error extracting modules:", error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      await saveMessage({
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `I couldn't analyze the syllabus, so no schedule was created. ${message.includes('sign in') || message.includes('session') ? 'Please sign in again using your normal account.' : 'Please check your connection and try again. If this keeps happening, check the server AI configuration and Firestore permissions.'}`,
+        conversationId: activeConversationId
+      });
     } finally {
       setIsLoading(false);
     }
