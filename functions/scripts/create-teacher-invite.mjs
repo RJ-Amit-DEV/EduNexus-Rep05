@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { initializeApp, applicationDefault } from "firebase-admin/app";
+import { getApp, initializeApp, applicationDefault } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
 const raw = process.env.TEACHER_INVITE_CODE?.trim().toUpperCase();
@@ -10,7 +10,7 @@ if (!raw || raw.length < 16) {
 initializeApp({ credential: applicationDefault() });
 const codeHash = createHash("sha256").update(raw).digest("hex");
 const FIRESTORE_DATABASE_ID = "ai-studio-185f624b-3a40-477e-8250-23627f389344";
-await getFirestore(undefined, FIRESTORE_DATABASE_ID).doc("teacherInvites/" + codeHash).create({
+await getFirestore(getApp(), FIRESTORE_DATABASE_ID).doc("teacherInvites/" + codeHash).create({
   active: true, claimedByUid: null, createdAt: new Date(),
   createdBy: process.env.INSTITUTION_ADMIN_UID || "manual-admin-provisioning"
 });
