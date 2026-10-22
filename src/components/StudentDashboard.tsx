@@ -49,6 +49,23 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 }) => {
   const getTodayString = () => new Date().toISOString().split('T')[0];
 
+  const isSupervisorSample = Boolean(profileData?.isPrivileged && !academicRecord);
+  const displayAcademicRecord = academicRecord || (isSupervisorSample ? {
+    id: 'team-sample-student-4042',
+    name: 'Aarav Sharma',
+    studentId: 'STU-4042',
+    parentId: 'PAR-4042',
+    classCode: 'CLS-DEMO-101',
+    rollNo: 'IT-042',
+    cgpa: '9.24',
+    ia1: 19,
+    ia2: 18,
+    attendance: 92,
+    quizPass: 88,
+    course: 'B.E. Information Technology',
+    batch: 'Semester 4'
+  } : null);
+
   const userDisplayName = profileData?.name?.trim() || auth.currentUser?.displayName?.trim() || 'Student';
   const userFirstName = React.useMemo(() => {
     if (!userDisplayName) return 'Student';
@@ -357,90 +374,74 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </p>
         </motion.div>
 
-        {/* Dynamic Quick Student Indicators */}
+        {/* Render real metrics when available; privileged Team Access sees labelled sample data. */}
+        {isSupervisorSample && (
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Supervisor preview · sample data, not real student records</p>
+        )}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
-            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">CGPA</p>
-            <p className="text-lg font-bold font-mono text-slate-900 dark:text-white mt-0.5">
-              {academicRecord?.cgpa || '—'}
-            </p>
-          </div>
-          <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
-            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Attendance</p>
-            <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
-              {typeof academicRecord?.attendance === 'number' ? `${academicRecord.attendance}%` : '—'}
-            </p>
-          </div>
-          <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
-            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">IA-1 Score</p>
-            <p className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400 mt-0.5">
-              {academicRecord?.ia1 ?? '—'}/20
-            </p>
-          </div>
+          {displayAcademicRecord?.cgpa !== undefined && displayAcademicRecord?.cgpa !== null && String(displayAcademicRecord.cgpa).trim() !== '' && (
+            <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">CGPA</p>
+              <p className="text-lg font-bold font-mono text-slate-900 dark:text-white mt-0.5">{displayAcademicRecord.cgpa}</p>
+            </div>
+          )}
+          {typeof displayAcademicRecord?.attendance === 'number' && (
+            <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Attendance</p>
+              <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">{displayAcademicRecord.attendance}%</p>
+            </div>
+          )}
+          {typeof displayAcademicRecord?.ia1 === 'number' && (
+            <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">IA-1 Score</p>
+              <p className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400 mt-0.5">{displayAcademicRecord.ia1}/20</p>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Student Enrollment & Identity Card */}
-      <section className="bg-gradient-to-r from-indigo-950/60 via-slate-900 to-indigo-900/50 border border-indigo-700/50 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
-        <div className="flex items-start sm:items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0">
-            <IdCard size={24} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">Class Enrollment & Identity</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-semibold font-mono">
-                Class: {profileData?.classCode || academicRecord?.classCode || 'Not linked'}
-              </span>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 mt-2">
-              {/* Student ID badge */}
-              <div className="flex items-center gap-2 bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-700">
-                <span className="text-xs text-slate-400">Student ID:</span>
-                <span className="font-mono font-bold text-white text-sm">{profileData?.studentId || academicRecord?.studentId || 'Not linked'}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(profileData?.studentId || academicRecord?.studentId || 'STU-4042');
-                    setCopiedKey('student');
-                    setTimeout(() => setCopiedKey(null), 2000);
-                  }}
-                  className="text-indigo-400 hover:text-indigo-200 p-0.5 cursor-pointer ml-1"
-                  title="Copy Student ID"
-                  disabled={!(profileData?.studentId || academicRecord?.studentId)}
-                >
-                  {copiedKey === 'student' ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-                </button>
+      {(profileData?.classCode || displayAcademicRecord?.classCode || profileData?.studentId || displayAcademicRecord?.studentId || profileData?.parentId || displayAcademicRecord?.parentId) && (
+        <section className="bg-gradient-to-r from-indigo-950/60 via-slate-900 to-indigo-900/50 border border-indigo-700/50 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div className="flex items-start sm:items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0"><IdCard size={24} /></div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">Class Enrollment & Identity</span>
+                {(profileData?.classCode || displayAcademicRecord?.classCode) && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-semibold font-mono">Class: {profileData?.classCode || displayAcademicRecord?.classCode}</span>
+                )}
               </div>
-
-              {/* Parent Access ID badge */}
-              <div className="flex items-center gap-2 bg-emerald-950/50 px-3 py-1.5 rounded-xl border border-emerald-500/40">
-                <KeyRound size={14} className="text-emerald-400" />
-                <span className="text-xs text-emerald-200">Parent Access ID:</span>
-                <span className="font-mono font-bold text-emerald-300 text-sm">{profileData?.parentId || academicRecord?.parentId || 'Not linked'}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(profileData?.parentId || academicRecord?.parentId || 'PAR-4042');
-                    setCopiedKey('parent');
-                    setTimeout(() => setCopiedKey(null), 2000);
-                  }}
-                  className="text-emerald-400 hover:text-emerald-200 p-0.5 cursor-pointer ml-1"
-                  title="Copy Parent Access ID to share with your guardian"
-                  disabled={!(profileData?.parentId || academicRecord?.parentId)}
-                >
-                  {copiedKey === 'parent' ? <Check size={13} className="text-emerald-300" /> : <Copy size={13} />}
-                </button>
+              <div className="flex flex-wrap items-center gap-3 mt-2">
+                {(profileData?.studentId || displayAcademicRecord?.studentId) && (
+                  <div className="flex items-center gap-2 bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-700">
+                    <span className="text-xs text-slate-400">Student ID:</span>
+                    <span className="font-mono font-bold text-white text-sm">{profileData?.studentId || displayAcademicRecord?.studentId}</span>
+                    <button type="button" onClick={() => { navigator.clipboard.writeText(profileData?.studentId || displayAcademicRecord?.studentId || ''); setCopiedKey('student'); setTimeout(() => setCopiedKey(null), 2000); }} className="text-indigo-400 hover:text-indigo-200 p-0.5 cursor-pointer ml-1" title="Copy Student ID">
+                      {copiedKey === 'student' ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                    </button>
+                  </div>
+                )}
+                {(profileData?.parentId || displayAcademicRecord?.parentId) && (
+                  <div className="flex items-center gap-2 bg-emerald-950/50 px-3 py-1.5 rounded-xl border border-emerald-500/40">
+                    <KeyRound size={14} className="text-emerald-400" />
+                    <span className="text-xs text-emerald-200">Parent Access ID:</span>
+                    <span className="font-mono font-bold text-emerald-300 text-sm">{profileData?.parentId || displayAcademicRecord?.parentId}</span>
+                    <button type="button" onClick={() => { navigator.clipboard.writeText(profileData?.parentId || displayAcademicRecord?.parentId || ''); setCopiedKey('parent'); setTimeout(() => setCopiedKey(null), 2000); }} className="text-emerald-400 hover:text-emerald-200 p-0.5 cursor-pointer ml-1" title="Copy Parent Access ID">
+                      {copiedKey === 'parent' ? <Check size={13} className="text-emerald-300" /> : <Copy size={13} />}
+                    </button>
+                  </div>
+                )}
               </div>
+              {(profileData?.parentId || displayAcademicRecord?.parentId) && (
+                <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+                  {isSupervisorSample ? 'Sample only: this Parent Access ID is for the supervisor preview and cannot link a real parent account.' : <>Share this Parent Access ID with the verified parent or guardian to request access to this student's academic progress.</>}
+                </p>
+              )}
             </div>
-
-            <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-              Share your <strong>Parent Access ID ({profileData?.parentId || academicRecord?.parentId || 'PAR-4042'})</strong> with your parents or guardians. They use this ID to sign in to the Parent Portal and view your academic progress reports.
-            </p>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
         {/* Main Content Area */}
