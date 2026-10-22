@@ -32,7 +32,6 @@ import { ProfileData, ConsistencyData, Student } from './types';
 import { DEFAULT_NOTICES, DEFAULT_MESSAGES, isPrivilegedTeamMember } from './constants';
 import { handleFirestoreError, OperationType } from './lib/firestore-errors';
 import { 
-  DEFAULT_TEACHER_CLASS_CODE, 
   generateStudentId, 
   generateParentId 
 } from './lib/id-generator';
@@ -407,16 +406,17 @@ const AppContent: React.FC = () => {
             ]
           : [];
 
-    const noticeSnapshots = new Map<string, Notice>();
-    const unsubscribeNotices = audienceQueries.map((noticeQuery) =>
+    const noticeSnapshotsByQuery: Map<string, Notice>[] = audienceQueries.map(() => new Map<string, Notice>());
+    const unsubscribeNotices = audienceQueries.map((noticeQuery, queryIndex) =>
       onSnapshot(noticeQuery, (snapshot) => {
+        const currentQueryNotices = new Map<string, Notice>();
         snapshot.docs.forEach((noticeDoc) => {
-          noticeSnapshots.set(noticeDoc.id, {
-            ...noticeDoc.data(),
-            id: noticeDoc.id
-          } as Notice);
+          currentQueryNotices.set(noticeDoc.id, { ...noticeDoc.data(), id: noticeDoc.id } as Notice);
         });
-        const merged = Array.from(noticeSnapshots.values()).sort((left, right) => {
+        noticeSnapshotsByQuery[queryIndex] = currentQueryNotices;
+        const mergedById = new Map<string, Notice>();
+        noticeSnapshotsByQuery.forEach((queryNotices) => queryNotices.forEach((notice, id) => mergedById.set(id, notice)));
+        const merged = Array.from(mergedById.values()).sort((left, right) => {
           const leftDate = left.date?.toMillis?.() ?? 0;
           const rightDate = right.date?.toMillis?.() ?? 0;
           return rightDate - leftDate;
@@ -424,30 +424,35 @@ const AppContent: React.FC = () => {
         setNotices(merged);
       }, (error) => {
         console.warn('Firestore notice audience query failed:', error);
-        setNotices([]);
+        noticeSnapshotsByQuery[queryIndex].clear();
+        const mergedById = new Map<string, Notice>();
+        noticeSnapshotsByQuery.forEach((queryNotices) => queryNotices.forEach((notice, id) => mergedById.set(id, notice)));
+        setNotices(Array.from(mergedById.values()));
       })
     );
 
-    // Listen for messages
-    const messagesQuery = query(collection(db, 'messages'), where('classCode', '==', classCode), orderBy('createdAt', 'asc'), limit(100));
-    const unsubscribeMessages = onSnapshot(messagesQuery, (snapshot) => {
-      const seenMsgIds = new Set<string>();
-      const newMessages: Message[] = [];
-      snapshot.docs.forEach((doc, idx) => {
-        const data = doc.data();
-        const baseId = doc.id || (data && data.id) || `msg-${idx}`;
-        const uniqueId = seenMsgIds.has(baseId) ? `${baseId}-${idx}` : baseId;
-        seenMsgIds.add(uniqueId);
-        newMessages.push({
-          ...data,
-          id: uniqueId
-        } as Message);
+    // Parents do not have access to classroom discussion messages.
+    let unsubscribeMessages = () => {};
+    if (role === 'teacher' || role === 'student') {
+      const messagesQuery = query(collection(db, 'messages'), where('classCode', '==', classCode), orderBy('createdAt', 'asc'), limit(100));
+      unsubscribeMessages = onSnapshot(messagesQuery, (snapshot) => {
+        const seenMsgIds = new Set<string>();
+        const newMessages: Message[] = [];
+        snapshot.docs.forEach((messageDoc, idx) => {
+          const data = messageDoc.data();
+          const baseId = messageDoc.id || (data && data.id) || `msg-${idx}`;
+          const uniqueId = seenMsgIds.has(baseId) ? `${baseId}-${idx}` : baseId;
+          seenMsgIds.add(uniqueId);
+          newMessages.push({ ...data, id: uniqueId } as Message);
+        });
+        setMessages(newMessages);
+      }, (error) => {
+        console.warn('Firestore message sync failed:', error);
+        setMessages([]);
       });
-      setMessages(newMessages.length > 0 ? newMessages : DEFAULT_MESSAGES);
-    }, (error) => {
-      console.warn("Firestore Message Sync (using defaults):", error);
-      setMessages(DEFAULT_MESSAGES);
-    });
+    } else {
+      setMessages([]);
+    }
 
     return () => {
       unsubscribeNotices.forEach((unsubscribe) => unsubscribe());
@@ -865,7 +870,7 @@ const AppContent: React.FC = () => {
         case 'notices': return <NoticeBoard notices={notices} setNotices={setNotices} isReadOnly={false} searchQuery={searchQuery} authorName={profileData.name} classCode={profileData.classCode || ''} />;
         case 'doubts': return <DoubtSolver messages={messages} setMessages={setMessages} userRole="teacher" userName={profileData.name} classCode={profileData.classCode || ''} searchQuery={searchQuery} />;
         case 'settings': return <ProfileSettings profile={profileData} onUpdate={updateProfile} onResetAccount={handleResetAccount} onRoleSwitch={handleRoleSwitch} />;
-        default: return <TeacherDashboard teacherName={profileData.name} classCode={profileData.classCode || DEFAULT_TEACHER_CLASS_CODE} searchQuery={searchQuery} />;
+        default: return <TeacherDashboard teacherName={profileData.name} classCode={profileData.classCode || ''} searchQuery={searchQuery} />;
       }
     } else if (role === 'parent') {
       switch (activeTab) {
