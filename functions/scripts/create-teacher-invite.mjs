@@ -9,7 +9,8 @@ if (!raw || raw.length < 16) {
 }
 initializeApp({ credential: applicationDefault() });
 const codeHash = createHash("sha256").update(raw).digest("hex");
-await getFirestore().doc("teacherInvites/" + codeHash).create({
+const FIRESTORE_DATABASE_ID = "ai-studio-185f624b-3a40-477e-8250-23627f389344";
+await getFirestore(undefined, FIRESTORE_DATABASE_ID).doc("teacherInvites/" + codeHash).create({
   active: true, claimedByUid: null, createdAt: new Date(),
   createdBy: process.env.INSTITUTION_ADMIN_UID || "manual-admin-provisioning"
 });
