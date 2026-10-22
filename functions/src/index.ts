@@ -1,11 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
-import { initializeApp } from "firebase-admin/app";
+import { getApp, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
 initializeApp();
 const FIRESTORE_DATABASE_ID = "ai-studio-185f624b-3a40-477e-8250-23627f389344";
-const db = getFirestore(undefined, FIRESTORE_DATABASE_ID);
+const db = getFirestore(getApp(), FIRESTORE_DATABASE_ID);
 const REGION = "us-central1";
 const VERCEL_ORIGIN = "https://edu-nexus-rep05.vercel.app";
 const cors = [VERCEL_ORIGIN, "http://localhost:3000", "http://localhost:5173"];
