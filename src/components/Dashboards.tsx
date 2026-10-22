@@ -135,7 +135,7 @@ interface TeacherDashboardProps {
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ 
   teacherName = 'Prof. Amit Jadhav', 
-  classCode = DEFAULT_TEACHER_CLASS_CODE,
+  classCode = '',
   searchQuery = '', 
   notices = [] 
 }) => {
@@ -199,7 +199,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       unsubscribeAuth();
       if (unsubscribeStudents) unsubscribeStudents();
     };
-  }, []);
+  }, [classCode]);
 
   const filteredStudents = students.filter(s => s.classCode === classCode).filter(s => 
     (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
