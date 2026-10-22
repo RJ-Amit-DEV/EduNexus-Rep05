@@ -76,6 +76,7 @@ export const claimStudentEnrollment = onCall(async (request) => {
     const student = s.data()!;
     if (student.studentUid && student.studentUid !== auth.uid) throw new HttpsError("already-exists", "This enrollment is already linked to another account.");
     if (p.exists && p.data()?.role !== "student") throw new HttpsError("permission-denied", "This account is registered for another portal.");
+    if (p.exists && p.data()?.studentDocId && p.data()?.studentDocId !== studentRef.id) throw new HttpsError("already-exists", "This account is already linked to a different student enrollment.");
     tx.update(studentRef, { studentUid: auth.uid, updatedAt: FieldValue.serverTimestamp() });
     tx.set(profileRef, { uid: auth.uid, name: String(auth.token.name ?? student.name), email: String(auth.token.email ?? ""), role: "student", studentDocId: studentRef.id, studentId: student.studentId, rollNo: student.rollNo, classCode: student.classCode, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   });
@@ -94,6 +95,7 @@ export const claimParentAccess = onCall(async (request) => {
     if (current.claimedByUid && current.claimedByUid !== auth.uid) throw new HttpsError("already-exists", "This parent code has already been claimed.");
     if (studentSnap.data()?.parentUid && studentSnap.data()?.parentUid !== auth.uid) throw new HttpsError("already-exists", "This student already has a linked parent account. Contact the institution to add another guardian.");
     if (profileSnap.exists && profileSnap.data()?.role !== "parent") throw new HttpsError("permission-denied", "This account is registered for another portal.");
+    if (profileSnap.exists && profileSnap.data()?.childStudentDocId && profileSnap.data()?.childStudentDocId !== studentRef.id) throw new HttpsError("already-exists", "This parent account is already linked to a different student.");
     tx.update(linkRef, { claimedByUid: auth.uid, claimedAt: FieldValue.serverTimestamp() });
     tx.update(studentRef, { parentUid: auth.uid, updatedAt: FieldValue.serverTimestamp() });
     tx.set(profileRef, { uid: auth.uid, name: String(auth.token.name ?? "Parent/Guardian"), email: String(auth.token.email ?? ""), role: "parent", childStudentId: link.studentId, childStudentDocId: link.studentDocId, parentLinkId: hash, classCode: link.classCode, updatedAt: FieldValue.serverTimestamp() }, { merge: true });

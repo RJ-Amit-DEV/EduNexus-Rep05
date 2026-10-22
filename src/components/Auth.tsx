@@ -851,8 +851,8 @@ export const Auth: React.FC<AuthProps> = ({
                       <input 
                         type="text"
                         value={teacherClassCode}
-                        onChange={(e) => setTeacherClassCode(e.target.value.trim())
-                        placeholder="e.g. CLS-4921"
+                        onChange={(e) => setTeacherClassCode(e.target.value.trim())}
+                        placeholder="Institution-issued teacher invite code"
                         className="w-full px-3.5 py-2.5 bg-slate-900 border border-indigo-500/50 rounded-xl text-xs sm:text-sm text-white font-mono tracking-wider outline-none focus:border-indigo-400"
                         required
                       />
