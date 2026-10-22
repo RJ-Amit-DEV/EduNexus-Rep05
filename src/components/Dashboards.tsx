@@ -238,8 +238,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         cgpa: newStudent.cgpa, ia1: newStudent.ia1, ia2: newStudent.ia2,
         attendance: newStudent.attendance, quizPass: newStudent.quizPass
       });
-      const created = response.data as { studentDocId: string; studentId: string; parentCode: string; classCode: string; rollNo: string };
-      window.alert('Student registered successfully.\nStudent ID: ' + created.studentId + '\nParent access code (shown once): ' + created.parentCode + '\nShare the parent code privately with the guardian. It cannot be recovered from the database.');
+      const created = response.data as { studentDocId: string; studentId: string; studentAccessCode: string; parentCode: string; classCode: string; rollNo: string };
+      window.alert('Student registered successfully.\nStudent ID: ' + created.studentId + '\nStudent login code (shown once): ' + created.studentAccessCode + '\nParent access code: ' + created.parentCode + '\nShare each code privately with its intended user. Codes are not stored in plaintext and cannot be recovered; reissue access if a code is lost.');
       setShowAddStudentModal(false);
       setNewStudent({ name: '', rollNo: '', cgpa: '', ia1: 0, ia2: 0, attendance: 0, quizPass: 0 });
     } catch (error: any) {
