@@ -31,10 +31,6 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ProfileData, ConsistencyData, Student } from './types';
 import { DEFAULT_NOTICES, DEFAULT_MESSAGES, isPrivilegedTeamMember } from './constants';
 import { handleFirestoreError, OperationType } from './lib/firestore-errors';
-import { 
-  generateStudentId, 
-  generateParentId 
-} from './lib/id-generator';
 import { collection, onSnapshot, query, where, orderBy, limit, doc, getDoc, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { 
   onAuthStateChanged, 
