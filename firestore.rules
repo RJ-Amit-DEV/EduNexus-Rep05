@@ -1,215 +1,56 @@
-
 rules_version = '2';
 service cloud.firestore {
-  match /databases/{database}/documents {
-
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-
-    function isSuperUser() {
-      return isAuthenticated() &&
-        request.auth.token.email in [
-          "amitjadhav4306@gmail.com",
-          "guptakunal4575@gmail.com",
-          "krishnagosavi880@gmail.com",
-          "rushabhhirave@gmail.com"
-        ];
-    }
-
-    function userProfile() {
-      return get(
-        /databases/$(database)/documents/users/$(request.auth.uid)
-      ).data;
-    }
-
-    function hasProfile() {
-      return isAuthenticated() &&
-        exists(
-          /databases/$(database)/documents/users/$(request.auth.uid)
-        );
-    }
-
-    function teacherOwnsClass(classCode) {
-      return hasProfile() &&
-        userProfile().role == 'teacher' &&
-        userProfile().classCode == classCode;
-    }
-
-    // Superuser access
-    match /{document=**} {
-      allow read, write: if isSuperUser();
-    }
-
-    // User profiles and private subcollections
-    match /users/{userId} {
-      allow read: if isAuthenticated();
-
-      allow create: if isSuperUser() || (
-        isOwner(userId) &&
-        request.resource.data.get('role', null) == 'student' &&
-        request.resource.data.get('studentId', null) == null &&
-        request.resource.data.get('parentId', null) == null &&
-        request.resource.data.get('childStudentId', null) == null &&
-        request.resource.data.get('classCode', null) == null
-      );
-
-      allow update: if isSuperUser() || (
-        isOwner(userId) &&
-        request.resource.data.get('role', null) ==
-          resource.data.get('role', null) &&
-        request.resource.data.get('parentId', null) ==
-          resource.data.get('parentId', null) &&
-        request.resource.data.get('childStudentId', null) ==
-          resource.data.get('childStudentId', null) &&
-        request.resource.data.get('studentId', null) ==
-          resource.data.get('studentId', null) &&
-        request.resource.data.get('classCode', null) ==
-          resource.data.get('classCode', null)
-      );
-
-      allow delete: if isSuperUser() || isOwner(userId);
-
-      match /deadlines/{deadlineId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      match /quiz_results/{resultId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      match /schedules/{scheduleId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      match /notes/{noteId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      match /scheduler_messages/{messageId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      match /{subTab}/{docId} {
-        allow read, write: if isOwner(userId);
-      }
-    }
-
-    // Student academic records
-    match /students/{studentDocId} {
-      allow read: if hasProfile() && (
-        (
-          userProfile().role == 'teacher' &&
-          resource.data.classCode == userProfile().classCode
-        ) ||
-        (
-          userProfile().role == 'parent' &&
-          userProfile().parentId != null &&
-          userProfile().childStudentId != null &&
-          resource.data.parentId == userProfile().parentId &&
-          resource.data.studentId == userProfile().childStudentId
-        ) ||
-        (
-          userProfile().role == 'student' &&
-          resource.data.studentId == userProfile().studentId
-        )
-      );
-
-      allow create: if teacherOwnsClass(
-        request.resource.data.classCode
-      );
-
-      allow update: if teacherOwnsClass(resource.data.classCode) &&
-        request.resource.data.classCode == resource.data.classCode;
-
-      allow delete: if teacherOwnsClass(resource.data.classCode);
-    }
-
-    // Audience-restricted institutional notices
-    match /notices/{noticeId} {
-      function validAudience(audience) {
-        return audience in [
-          'all', 'students', 'parents', 'specific'
-        ];
-      }
-
-      function canReadNotice() {
-        return hasProfile() && (
-          userProfile().role == 'teacher' ||
-          resource.data.targetAudience == 'all' ||
-          (
-            userProfile().role == 'student' &&
-            resource.data.targetAudience == 'students'
-          ) ||
-          (
-            userProfile().role == 'parent' &&
-            resource.data.targetAudience == 'parents'
-          ) ||
-          (
-            resource.data.targetAudience == 'specific' &&
-            resource.data.get('recipientUids', []) is list &&
-            request.auth.uid in resource.data.get('recipientUids', [])
-          )
-        );
-      }
-
-      allow read: if canReadNotice();
-
-      allow create: if hasProfile() &&
-        userProfile().role == 'teacher' &&
-        request.resource.data.authorId == request.auth.uid &&
-        request.resource.data.title is string &&
-        request.resource.data.content is string &&
-        request.resource.data.title.size() > 0 &&
-        request.resource.data.content.size() > 0 &&
-        validAudience(request.resource.data.targetAudience) &&
-        (
-          request.resource.data.targetAudience != 'specific' ||
-          (
-            request.resource.data.get('recipientUids', []) is list &&
-            request.resource.data.recipientUids.size() > 0
-          )
-        );
-
-      // Notices cannot be edited after publication.
-      allow update: if false;
-
-      allow delete: if isSuperUser() ||
-        (
-          isAuthenticated() &&
-          resource.data.authorId == request.auth.uid
-        );
-    }
-
-    // Shared discussion: authenticate author and validate content
-    match /messages/{messageId} {
-      allow read: if isAuthenticated();
-
-      allow create: if hasProfile() &&
-        userProfile().role in ['teacher', 'student'] &&
-        request.resource.data.authorId == request.auth.uid &&
-        request.resource.data.role == userProfile().role &&
-        request.resource.data.content is string &&
-        request.resource.data.content.size() > 0 &&
-        request.resource.data.content.size() <= 5000;
-
-      allow update: if false;
-
-      allow delete: if isSuperUser() ||
-        (
-          isAuthenticated() &&
-          (
-            resource.data.authorId == request.auth.uid ||
-            (
-              hasProfile() &&
-              userProfile().role == 'teacher'
-            )
-          )
-        );
-    }
+ match /databases/{database}/documents {
+  function signedIn(){return request.auth != null;}
+  function owner(uid){return signedIn() && request.auth.uid == uid;}
+  function admin(){return signedIn() && request.auth.token.email in ["amitjadhav4306@gmail.com","guptakunal4575@gmail.com","krishnagosavi880@gmail.com","rushabhhirave@gmail.com"];}
+  function hasProfile(){return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));}
+  function p(){return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;}
+  function ownsStudent(){return hasProfile() && p().role == 'teacher' && resource.data.teacherUid == request.auth.uid && resource.data.classCode == p().classCode;}
+  match /{document=**}{allow read,write:if admin();}
+  match /users/{uid}{
+   allow read:if owner(uid);
+   allow create,delete:if false;
+   allow update:if owner(uid) && request.resource.data.role == resource.data.role &&
+    request.resource.data.get('classCode',null) == resource.data.get('classCode',null) &&
+    request.resource.data.get('studentId',null) == resource.data.get('studentId',null) &&
+    request.resource.data.get('studentDocId',null) == resource.data.get('studentDocId',null) &&
+    request.resource.data.get('parentId',null) == resource.data.get('parentId',null) &&
+    request.resource.data.get('childStudentId',null) == resource.data.get('childStudentId',null) &&
+    request.resource.data.get('childStudentDocId',null) == resource.data.get('childStudentDocId',null) &&
+    request.resource.data.get('parentLinkId',null) == resource.data.get('parentLinkId',null);
+   match /deadlines/{id}{allow read,write:if owner(uid);}
+   match /quiz_results/{id}{allow read,write:if owner(uid);}
+   match /schedules/{id}{allow read,write:if owner(uid);}
+   match /notes/{id}{allow read,write:if owner(uid);}
+   match /scheduler_messages/{id}{allow read,write:if owner(uid);}
+   match /{subcollection}/{id}{allow read,write:if owner(uid);}
   }
+  match /classes/{classCode}{
+   allow read:if signedIn() && (resource.data.teacherUid == request.auth.uid || (hasProfile() && p().classCode == classCode && p().role in ['student','parent']));
+   allow create,update,delete:if false;
+  }
+  match /students/{id}{
+   allow get:if admin() || ownsStudent() || (hasProfile() && ((p().role == 'student' && resource.data.studentUid == request.auth.uid) || (p().role == 'parent' && resource.data.parentUid == request.auth.uid)));
+   allow list:if admin() || (hasProfile() && p().role == 'teacher' && resource.data.teacherUid == request.auth.uid && resource.data.classCode == p().classCode);
+   allow create,delete:if false;
+   allow update:if admin() || (ownsStudent() && request.resource.data.teacherUid == resource.data.teacherUid && request.resource.data.classCode == resource.data.classCode && request.resource.data.studentUid == resource.data.studentUid && request.resource.data.parentUid == resource.data.parentUid && request.resource.data.studentId == resource.data.studentId && request.resource.data.rollNo == resource.data.rollNo && request.resource.data.parentLinkId == resource.data.parentLinkId);
+  }
+  match /parentLinks/{id}{allow read,write:if false;}
+  match /teacherInvites/{id}{allow read,write:if false;}
+  match /notices/{id}{
+   function audience(a){return a in ['all','students','parents','specific'];}
+   function canRead(){return hasProfile() && (p().role == 'teacher' || resource.data.targetAudience == 'all' || (p().role == 'student' && resource.data.targetAudience == 'students') || (p().role == 'parent' && resource.data.targetAudience == 'parents') || (resource.data.targetAudience == 'specific' && resource.data.get('recipientUids',[]) is list && request.auth.uid in resource.data.get('recipientUids',[])));}
+   allow read:if canRead();
+   allow create:if hasProfile() && p().role == 'teacher' && request.resource.data.authorId == request.auth.uid && request.resource.data.classCode == p().classCode && request.resource.data.title is string && request.resource.data.title.size()>0 && request.resource.data.content is string && request.resource.data.content.size()>0 && audience(request.resource.data.targetAudience) && (request.resource.data.targetAudience != 'specific' || (request.resource.data.get('recipientUids',[]) is list && request.resource.data.recipientUids.size()>0));
+   allow update:if false;
+   allow delete:if admin() || (signedIn() && resource.data.authorId == request.auth.uid);
+  }
+  match /messages/{id}{
+   allow read:if signedIn() && hasProfile() && p().role in ['teacher','student'] && resource.data.classCode == p().classCode;
+   allow create:if hasProfile() && p().role in ['teacher','student'] && request.resource.data.authorId == request.auth.uid && request.resource.data.role == p().role && request.resource.data.classCode == p().classCode && request.resource.data.content is string && request.resource.data.content.size()>0 && request.resource.data.content.size()<=5000;
+   allow update:if false;
+   allow delete:if admin() || (signedIn() && resource.data.authorId == request.auth.uid);
+  }
+ }
 }
