@@ -72,7 +72,6 @@ export const Auth: React.FC<AuthProps> = ({
   const [contactSent, setContactSent] = useState(false);
 
   // Student Form State
-  const [studentName, setStudentName] = useState('');
   const [studentAccessCode, setStudentAccessCode] = useState('');
 
   // Teacher Form State
@@ -744,18 +743,6 @@ export const Auth: React.FC<AuthProps> = ({
                   </div>
 
                   <form onSubmit={handleStudentSubmit} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">Student Full Name</label>
-                      <input 
-                        type="text"
-                        value={studentName}
-                        onChange={(e) => setStudentName(e.target.value)}
-                        placeholder="e.g. Aarav Sharma"
-                        className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500"
-                        required
-                      />
-                    </div>
-
                     <div>
                       <label className="block text-xs font-semibold text-slate-300 mb-1.5">Student Login Code</label>
                       <input
