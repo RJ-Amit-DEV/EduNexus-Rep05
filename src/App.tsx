@@ -460,10 +460,10 @@ const AppContent: React.FC = () => {
         return false;
       });
       
-      setNotices(filtered.length > 0 ? filtered : DEFAULT_NOTICES);
+      setNotices(filtered);
     }, (error) => {
-      console.warn("Firestore Notice Sync (using defaults):", error);
-      setNotices(DEFAULT_NOTICES);
+      console.warn("Firestore Notice Sync failed:", error);
+      setNotices([]);
     });
 
     // Listen for messages
@@ -481,10 +481,10 @@ const AppContent: React.FC = () => {
           id: uniqueId
         } as Message);
       });
-      setMessages(newMessages.length > 0 ? newMessages : DEFAULT_MESSAGES);
+      setMessages(newMessages);
     }, (error) => {
-      console.warn("Firestore Message Sync (using defaults):", error);
-      setMessages(DEFAULT_MESSAGES);
+      console.warn("Firestore Message Sync failed:", error);
+      setMessages([]);
     });
 
     return () => {
