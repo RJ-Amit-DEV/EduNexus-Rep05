@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { FileDown, FilePlus2, FileText, Loader2, Pencil, Search, Trash2, X, Save, AlertCircle, Cloud, HardDrive } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -57,9 +57,11 @@ export const SmartNotes: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const initialSelectionDone = useRef(false);
   const user = auth.currentUser;
 
   useEffect(() => {
+    initialSelectionDone.current = false;
     setIsLoading(true);
     setError(null);
 
@@ -80,12 +82,15 @@ export const SmartNotes: React.FC = () => {
       setNotes(fetched);
       setIsLoading(false);
       setError(null);
-      if (!activeId && fetched.length) {
-        const first = fetched[0];
-        setActiveId(first.id);
-        setTitle(first.title || '');
-        setSubject(first.subject || '');
-        setContent(first.content || '');
+      if (!initialSelectionDone.current) {
+        initialSelectionDone.current = true;
+        if (fetched.length) {
+          const first = fetched[0];
+          setActiveId(first.id);
+          setTitle(first.title || '');
+          setSubject(first.subject || '');
+          setContent(first.content || '');
+        }
       }
     }, err => {
       console.error('Smart Notes sync failed:', err);
@@ -148,7 +153,7 @@ export const SmartNotes: React.FC = () => {
     try {
       if (user) {
         const notesPath = `users/${user.uid}/notes`;
-        if (isCreating || !activeId) {
+        if (isCreating || !activeId || activeId.startsWith('local-')) {
           const created = await addDoc(collection(db, notesPath), payload);
           setActiveId(created.id);
           setIsCreating(false);
