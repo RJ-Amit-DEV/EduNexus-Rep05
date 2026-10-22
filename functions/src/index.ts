@@ -44,12 +44,23 @@ export const addStudentToClass = onCall(async (request) => {
   if (!classSnap.exists || classSnap.data()?.teacherUid !== auth.uid || classSnap.data()?.active !== true) throw new HttpsError("permission-denied", "You can only register students in your own active class.");
   const duplicate = await db.collection("students").where("classCode", "==", classCode).where("rollNo", "==", rollNo).limit(1).get();
   if (!duplicate.empty) throw new HttpsError("already-exists", "That roll number is already registered in this class.");
+  const cgpaRaw = request.data?.cgpa;
+  const cgpa = cgpaRaw === undefined || cgpaRaw === null || cgpaRaw === "" ? "" : Number(cgpaRaw);
+  const ia1 = request.data?.ia1 === undefined ? null : Number(request.data.ia1);
+  const ia2 = request.data?.ia2 === undefined ? null : Number(request.data.ia2);
+  const attendance = request.data?.attendance === undefined ? null : Number(request.data.attendance);
+  const quizPass = request.data?.quizPass === undefined ? null : Number(request.data.quizPass);
+  if ((cgpa !== "" && (!Number.isFinite(cgpa) || cgpa < 0 || cgpa > 10)) ||
+      [ia1, ia2].some(v => v !== null && (!Number.isFinite(v) || v < 0 || v > 20)) ||
+      [attendance, quizPass].some(v => v !== null && (!Number.isFinite(v) || v < 0 || v > 100))) {
+    throw new HttpsError("invalid-argument", "Academic marks are outside their valid ranges.");
+  }
   const studentRef = db.collection("students").doc(), studentId = randomCode("STU-", 6), parentCode = randomCode("PAR-", 8), hash = codeHash(parentCode);
   const linkRef = db.doc(`parentLinks/${hash}`);
   await db.runTransaction(async tx => {
     const dup = await tx.get(db.collection("students").where("classCode", "==", classCode).where("rollNo", "==", rollNo).limit(1));
     if (!dup.empty) throw new HttpsError("already-exists", "That roll number is already registered in this class.");
-    tx.create(studentRef, { studentId, rollNo, name, classCode, teacherUid: auth.uid, studentUid: null, parentUid: null, parentLinkId: hash, cgpa: "", ia1: null, ia2: null, attendance: null, quizPass: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    tx.create(studentRef, { studentId, rollNo, name, classCode, teacherUid: auth.uid, studentUid: null, parentUid: null, parentLinkId: hash, cgpa, ia1, ia2, attendance, quizPass, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
     tx.create(linkRef, { studentDocId: studentRef.id, studentId, classCode, teacherUid: auth.uid, codeHash: hash, claimedByUid: null, active: true, createdAt: FieldValue.serverTimestamp() });
   });
   return { studentDocId: studentRef.id, studentId, parentCode, classCode, rollNo };

@@ -264,9 +264,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     e.preventDefault();
     if (!newStudent.name.trim() || !newStudent.rollNo.trim() || !auth.currentUser) return;
     try {
-      const result = await httpsCallable(functions, 'addStudentToClass')({ classCode, name: newStudent.name.trim(), rollNo: newStudent.rollNo.trim().toUpperCase() });
+      const result = await httpsCallable(functions, 'addStudentToClass')({ classCode, name: newStudent.name.trim(), rollNo: newStudent.rollNo.trim().toUpperCase(), cgpa: newStudent.cgpa, ia1: newStudent.ia1, ia2: newStudent.ia2, attendance: newStudent.attendance, quizPass: newStudent.quizPass });
       const created = result.data as { studentDocId: string; studentId: string; parentCode: string; classCode: string; rollNo: string };
-      const record: Student = { id: created.studentDocId, studentId: created.studentId, parentId: created.parentCode, classCode: created.classCode, rollNo: created.rollNo, name: newStudent.name.trim(), cgpa: '', ia1: 0, ia2: 0, attendance: 0, quizPass: 0, batch: 'INFTT-1', college: 'Institute of Engineering & Technology', course: 'B.E. Information Technology' };
+      const record: Student = { id: created.studentDocId, studentId: created.studentId, parentId: created.parentCode, classCode: created.classCode, rollNo: created.rollNo, name: newStudent.name.trim(), cgpa: String(newStudent.cgpa || ''), ia1: Number(newStudent.ia1), ia2: Number(newStudent.ia2), attendance: Number(newStudent.attendance), quizPass: Number(newStudent.quizPass), batch: 'INFTT-1', college: 'Institute of Engineering & Technology', course: 'B.E. Information Technology' };
       setStudents(prev => [record, ...prev]);
       window.alert('Student registered. Student ID: ' + created.studentId + '\nParent Access Code (shown once): ' + created.parentCode + '\nShare this code securely with the guardian.');
       setShowAddStudentModal(false); setNewStudent({ name: '', rollNo: '', cgpa: '9.20', ia1: 18, ia2: 17, attendance: 92, quizPass: 86 });
