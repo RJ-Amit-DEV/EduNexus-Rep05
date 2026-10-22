@@ -209,8 +209,11 @@ export const redeemPortalAccessCode = onCall({ region: REGION, cors }, async (re
       if (link.consumedByUid && link.consumedByUid !== uid) {
         throw new HttpsError("failed-precondition", "This parent access code is linked to another account. Ask the teacher to reissue it.");
       }
-      if (!link.active && !(link.consumedByUid === uid && userSnap.exists && userSnap.data()?.role === "parent" && userSnap.data()?.childStudentDocId === studentRef.id)) {
+      if (!link.active && link.consumedByUid !== uid) {
         throw new HttpsError("permission-denied", "The parent access code is inactive. Ask your teacher to reissue it.");
+      }
+      if (!link.active && studentSnap.data()?.parentUid !== uid) {
+        throw new HttpsError("permission-denied", "The parent link is no longer valid. Ask the institution to review access.");
       }
       if (userSnap.exists && (userSnap.data()?.role !== "parent" || userSnap.data()?.childStudentDocId !== studentRef.id)) {
         throw new HttpsError("already-exists", "This access code is already associated with a different portal profile.");
