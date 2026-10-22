@@ -9,7 +9,7 @@ const FIRESTORE_DATABASE_ID = "ai-studio-185f624b-3a40-477e-8250-23627f389344";
 const db = getFirestore(getApp(), FIRESTORE_DATABASE_ID);
 const REGION = "us-central1";
 const VERCEL_ORIGIN = "https://edu-nexus-rep05.vercel.app";
-const cors = [VERCEL_ORIGIN, "http://localhost:3000", "http://localhost:5173"];
+const cors = [VERCEL_ORIGIN, /^https:\/\/edu-nexus-rep05(?:-[a-z0-9-]+)?-amits-projects-58dfb76c\.vercel\.app$/, "http://localhost:3000", "http://localhost:5173"];
 
 function requireAuth(request: any) {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Sign in with Google before continuing.");
