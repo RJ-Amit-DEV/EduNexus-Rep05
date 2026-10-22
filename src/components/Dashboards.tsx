@@ -61,7 +61,7 @@ import * as XLSX from 'xlsx';
 import { db, auth, functions } from '../firebase';
 import { httpsCallable } from 'firebase/functions';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, query, updateDoc, doc, setDoc, addDoc, deleteDoc, serverTimestamp, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, updateDoc, doc, setDoc, addDoc, deleteDoc, serverTimestamp, where, getDocs } from 'firebase/firestore';
 import { ConsistencyData, Student } from '../types';
 import { Notice } from './NoticeBoard';
 import { DEFAULT_TEACHER_CLASS_CODE, generateStudentId, generateParentId } from '../lib/id-generator';
