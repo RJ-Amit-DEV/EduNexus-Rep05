@@ -436,7 +436,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </div>
 
             <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-              Share your <strong>Parent Access ID ({profileData?.parentId || academicRecord?.parentId || 'PAR-4042'})</strong> with your parents or guardians. They use this ID to sign in to the Parent Portal and view your academic progress reports.
+              The Parent ID above is a reference only, not a login credential. Your teacher provides a separate private Parent Access Code to your guardian. Do not share your student login code with anyone else.
             </p>
           </div>
         </div>
