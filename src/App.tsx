@@ -414,57 +414,45 @@ const AppContent: React.FC = () => {
       return;
     }
 
-    // Listen for notices with specific filters
-    const noticesQuery = query(collection(db, 'notices'), orderBy('date', 'desc'), limit(50));
-    const unsubscribeNotices = onSnapshot(noticesQuery, (snapshot) => {
-      const seenIds = new Set<string>();
-      const allNotices: Notice[] = [];
-      snapshot.docs.forEach((doc, idx) => {
-        const data = doc.data();
-        const baseId = doc.id || (data && data.id) || `notice-${idx}`;
-        const uniqueId = seenIds.has(baseId) ? `${baseId}-${idx}` : baseId;
-        seenIds.add(uniqueId);
-        allNotices.push({
-          ...data,
-          id: uniqueId
-        } as Notice);
-      });
-      
-      // Filter notices based on role and target
-      const filtered = allNotices.filter(n => {
-        if (role === 'teacher') return true;
-        
-        // Defaults to 'all' if not specified (legacy notices)
-        const audience = n.targetAudience || 'all';
-        if (audience === 'all') return true;
-        
-        const targetRoll = n.targetRollNo ? String(n.targetRollNo).trim() : '';
-        const userRoll = profileData.rollNo ? String(profileData.rollNo).trim() : '';
-        
-        if (role === 'student') {
-          const studentRecRoll = studentAcademicRecord?.rollNo ? String(studentAcademicRecord.rollNo).trim() : '';
-          if (audience === 'students') return true;
-          if (audience === 'specific') {
-            return targetRoll !== '' && (targetRoll === userRoll || targetRoll === studentRecRoll);
-          }
-        }
-        
-        if (role === 'parent') {
-          const childRoll = childAcademicRecord?.rollNo ? String(childAcademicRecord.rollNo).trim() : '';
-          if (audience === 'parents') return true;
-          if (audience === 'specific') {
-            // Parent sees notice if it targets their own roll (if any) or their child's roll
-            return targetRoll !== '' && (targetRoll === userRoll || targetRoll === childRoll);
-          }
-        }
-        return false;
-      });
-      
-      setNotices(filtered.length > 0 ? filtered : DEFAULT_NOTICES);
-    }, (error) => {
-      console.warn("Firestore Notice Sync (using defaults):", error);
-      setNotices(DEFAULT_NOTICES);
-    });
+    // Query only audiences the signed-in role is permitted to read.
+    // Firestore rules do not filter query results; each query must be authorized as a whole.
+    const noticeCollection = collection(db, 'notices');
+    const audienceQueries = role === 'teacher'
+      ? [query(noticeCollection, orderBy('date', 'desc'), limit(50))]
+      : role === 'student'
+        ? [
+            query(noticeCollection, where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
+            query(noticeCollection, where('targetAudience', '==', 'students'), orderBy('date', 'desc'), limit(50)),
+            query(noticeCollection, where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
+          ]
+        : role === 'parent'
+          ? [
+              query(noticeCollection, where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
+              query(noticeCollection, where('targetAudience', '==', 'parents'), orderBy('date', 'desc'), limit(50)),
+              query(noticeCollection, where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
+            ]
+          : [];
+
+    const noticeSnapshots = new Map<string, Notice>();
+    const unsubscribeNotices = audienceQueries.map((noticeQuery) =>
+      onSnapshot(noticeQuery, (snapshot) => {
+        snapshot.docs.forEach((noticeDoc) => {
+          noticeSnapshots.set(noticeDoc.id, {
+            ...noticeDoc.data(),
+            id: noticeDoc.id
+          } as Notice);
+        });
+        const merged = Array.from(noticeSnapshots.values()).sort((left, right) => {
+          const leftDate = left.date?.toMillis?.() ?? 0;
+          const rightDate = right.date?.toMillis?.() ?? 0;
+          return rightDate - leftDate;
+        });
+        setNotices(merged);
+      }, (error) => {
+        console.warn('Firestore notice audience query failed:', error);
+        setNotices([]);
+      })
+    );
 
     // Listen for messages
     const messagesQuery = query(collection(db, 'messages'), orderBy('createdAt', 'asc'), limit(100));
@@ -488,7 +476,7 @@ const AppContent: React.FC = () => {
     });
 
     return () => {
-      unsubscribeNotices();
+      unsubscribeNotices.forEach((unsubscribe) => unsubscribe());
       unsubscribeMessages();
     };
   }, [isLoggedIn, role, profileData.rollNo, childAcademicRecord?.rollNo]);
