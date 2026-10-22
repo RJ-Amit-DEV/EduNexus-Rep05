@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
-import { initializeApp } from "firebase-admin/app";
+import { getApp, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
 initializeApp();
-const db = getFirestore();
+const FIRESTORE_DATABASE_ID = "ai-studio-185f624b-3a40-477e-8250-23627f389344";
+const db = getFirestore(getApp(), FIRESTORE_DATABASE_ID);
 const REGION = "us-central1";
 const VERCEL_ORIGIN = "https://edu-nexus-rep05.vercel.app";
 const cors = [VERCEL_ORIGIN, "http://localhost:3000", "http://localhost:5173"];
@@ -57,11 +58,16 @@ export const createTeacherClass = onCall({ region: REGION, cors }, async (reques
 
   await db.runTransaction(async (tx) => {
     const [inviteSnap, userSnap] = await Promise.all([tx.get(inviteRef), tx.get(userRef)]);
-    if (!inviteSnap.exists || inviteSnap.data()?.active !== true) {
+    if (!inviteSnap.exists) {
       throw new HttpsError("permission-denied", "The teacher invitation code is invalid or already used. Ask your institution for a valid invitation.");
     }
-    if (inviteSnap.data()?.claimedByUid && inviteSnap.data()?.claimedByUid !== uid) {
+    const invite = inviteSnap.data()!;
+    if (invite.claimedByUid && invite.claimedByUid !== uid) {
       throw new HttpsError("already-exists", "This teacher invitation has already been used.");
+    }
+    if (!invite.active) {
+      if (invite.claimedByUid === uid && userSnap.exists && userSnap.data()?.role === "teacher" && userSnap.data()?.classCode) return;
+      throw new HttpsError("permission-denied", "The teacher invitation code is invalid or already used. Ask your institution for a valid invitation.");
     }
     if (userSnap.exists && userSnap.data()?.role && userSnap.data()?.role !== "teacher") {
       throw new HttpsError("permission-denied", "This Google account is already registered for a different portal.");
@@ -93,6 +99,7 @@ export const addStudentToClass = onCall({ region: REGION, cors }, async (request
   const studentRef = db.collection("students").doc();
   const studentId = randomCode("STU-", 6);
   const parentCode = randomCode("PAR-", 16);
+  const parentId = randomCode("PAR-ID-", 6);
   const parentCodeHash = hash(parentCode);
   const parentLinkRef = db.doc("parentLinks/" + parentCodeHash);
   const cgpa = validMark(request.data?.cgpa, "CGPA", 0, 10);
@@ -112,7 +119,7 @@ export const addStudentToClass = onCall({ region: REGION, cors }, async (request
     }
     if (!existing.empty) throw new HttpsError("already-exists", "That roll number is already registered in this class.");
     tx.create(studentRef, {
-      studentId, parentId: parentCode, parentLinkId: parentCodeHash,
+      studentId, parentId, parentLinkId: parentCodeHash,
       classCode, teacherUid: uid, studentUid: null, parentUid: null,
       rollNo, name, cgpa: cgpa ?? "", ia1: ia1 ?? 0, ia2: ia2 ?? 0,
       attendance: attendance ?? 0, quizPass: quizPass ?? 0,
@@ -168,9 +175,16 @@ export const claimParentAccess = onCall({ region: REGION, cors }, async (request
   let studentDocId = "";
   await db.runTransaction(async (tx) => {
     const [linkSnap, userSnap] = await Promise.all([tx.get(linkRef), tx.get(userRef)]);
-    if (!linkSnap.exists || linkSnap.data()?.active !== true) throw new HttpsError("permission-denied", "The parent access code is invalid or already used.");
+    if (!linkSnap.exists) throw new HttpsError("permission-denied", "The parent access code is invalid or already used.");
     const link = linkSnap.data()!;
     if (link.consumedByUid && link.consumedByUid !== uid) throw new HttpsError("already-exists", "This parent code has already been linked to another Google account.");
+    if (!link.active) {
+      if (link.consumedByUid === uid && userSnap.exists && userSnap.data()?.role === "parent" && userSnap.data()?.childStudentDocId === link.studentDocId) {
+        studentDocId = link.studentDocId;
+        return;
+      }
+      throw new HttpsError("permission-denied", "The parent access code is invalid or already used.");
+    }
     if (userSnap.exists && userSnap.data()?.role && userSnap.data()?.role !== "parent") {
       throw new HttpsError("permission-denied", "This Google account is already registered for a different portal.");
     }
