@@ -108,6 +108,7 @@ export const addStudentToClass = onCall({ region: REGION, cors }, async (request
   const studentId = randomCode("STU-", 6);
   const studentAccessCode = randomCode("STU-LOGIN-", 12);
   const studentAccessCodeHash = hash(studentAccessCode);
+  const studentAccessRef = db.doc("studentAccessCodes/" + studentAccessCodeHash);
   const parentCode = randomCode("PAR-", 16);
   const parentId = randomCode("PAR-ID-", 6);
   const parentCodeHash = hash(parentCode);
@@ -129,13 +130,17 @@ export const addStudentToClass = onCall({ region: REGION, cors }, async (request
     }
     if (!existing.empty) throw new HttpsError("already-exists", "That roll number is already registered in this class.");
     tx.create(studentRef, {
-      studentId, parentId, parentLinkId: parentCodeHash, studentAccessCodeHash,
+      studentId, parentId, parentLinkId: parentCodeHash,
       classCode, teacherUid: uid, studentUid: null, parentUid: null,
       rollNo, name, cgpa: cgpa ?? "", ia1: ia1 ?? 0, ia2: ia2 ?? 0,
       attendance: attendance ?? 0, quizPass: quizPass ?? 0,
       batch: "INFTT-1", college: "Institute of Engineering & Technology",
       course: "B.E. Information Technology", createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
+    });
+    tx.create(studentAccessRef, {
+      studentDocId: studentRef.id, classCode, teacherUid: uid, active: true,
+      createdAt: FieldValue.serverTimestamp(),
     });
     tx.create(parentLinkRef, {
       studentDocId: studentRef.id, classCode, teacherUid: uid,
@@ -160,12 +165,15 @@ export const redeemPortalAccessCode = onCall({ region: REGION, cors }, async (re
   let studentDocId = "";
 
   if (role === "student") {
-    const matches = await db.collection("students").where("studentAccessCodeHash", "==", codeHash).limit(2).get();
-    if (matches.size !== 1) throw new HttpsError("permission-denied", "The student login code is invalid. Ask your teacher to verify or reissue it.");
-    const studentRef = matches.docs[0].ref;
+    const studentAccessRef = db.doc("studentAccessCodes/" + codeHash);
+    const accessSnap = await studentAccessRef.get();
+    if (!accessSnap.exists || accessSnap.data()?.active !== true || typeof accessSnap.data()?.studentDocId !== "string") {
+      throw new HttpsError("permission-denied", "The student login code is invalid or inactive. Ask your teacher to verify or reissue it.");
+    }
+    const studentRef = db.doc("students/" + accessSnap.data()!.studentDocId);
     await db.runTransaction(async (tx) => {
-      const [studentSnap, userSnap] = await Promise.all([tx.get(studentRef), tx.get(userRef)]);
-      if (!studentSnap.exists || studentSnap.data()?.studentAccessCodeHash !== codeHash) {
+      const [accessRecord, studentSnap, userSnap] = await Promise.all([tx.get(studentAccessRef), tx.get(studentRef), tx.get(userRef)]);
+      if (!accessRecord.exists || accessRecord.data()?.active !== true || accessRecord.data()?.studentDocId !== studentRef.id || !studentSnap.exists) {
         throw new HttpsError("permission-denied", "The student login code is invalid.");
       }
       const student = studentSnap.data()!;
