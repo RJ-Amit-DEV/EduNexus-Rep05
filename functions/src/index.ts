@@ -175,9 +175,16 @@ export const claimParentAccess = onCall({ region: REGION, cors }, async (request
   let studentDocId = "";
   await db.runTransaction(async (tx) => {
     const [linkSnap, userSnap] = await Promise.all([tx.get(linkRef), tx.get(userRef)]);
-    if (!linkSnap.exists || linkSnap.data()?.active !== true) throw new HttpsError("permission-denied", "The parent access code is invalid or already used.");
+    if (!linkSnap.exists) throw new HttpsError("permission-denied", "The parent access code is invalid or already used.");
     const link = linkSnap.data()!;
     if (link.consumedByUid && link.consumedByUid !== uid) throw new HttpsError("already-exists", "This parent code has already been linked to another Google account.");
+    if (!link.active) {
+      if (link.consumedByUid === uid && userSnap.exists && userSnap.data()?.role === "parent" && userSnap.data()?.childStudentDocId === link.studentDocId) {
+        studentDocId = link.studentDocId;
+        return;
+      }
+      throw new HttpsError("permission-denied", "The parent access code is invalid or already used.");
+    }
     if (userSnap.exists && userSnap.data()?.role && userSnap.data()?.role !== "parent") {
       throw new HttpsError("permission-denied", "This Google account is already registered for a different portal.");
     }
