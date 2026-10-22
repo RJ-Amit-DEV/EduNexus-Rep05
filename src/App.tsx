@@ -286,6 +286,10 @@ const AppContent: React.FC = () => {
         unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const userData = docSnap.data() as ProfileData;
+            const validEnrollment = userData.role === 'teacher' ? Boolean(userData.classCode) : userData.role === 'student' ? Boolean(userData.classCode && (userData as any).studentDocId && userData.rollNo) : Boolean(userData.classCode && (userData as any).childStudentDocId);
+            if (!validEnrollment) {
+              setIsLoggedIn(false); setShowRoleSelection(true); setAuthError('This account needs verified enrollment linking. Enter the required class, roll number, or parent code to continue.'); setIsLoading(false); return;
+            }
             setProfileData(userData);
             setRole(userData.role);
             setIsLoggedIn(true);
@@ -390,9 +394,9 @@ const AppContent: React.FC = () => {
           ]
         : role === 'parent'
           ? [
-              query(noticeCollection, where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
+              query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
               query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'parents'), orderBy('date', 'desc'), limit(50)),
-              query(noticeCollection, where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
+              query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
             ]
           : [];
 
@@ -828,7 +832,7 @@ const AppContent: React.FC = () => {
       }
     } else if (role === 'teacher') {
       switch (activeTab) {
-        case 'my-class': return <TeacherDashboard teacherName={profileData.name} classCode={profileData.classCode || DEFAULT_TEACHER_CLASS_CODE} searchQuery={searchQuery} notices={notices} />;
+        case 'my-class': return <TeacherDashboard teacherName={profileData.name} classCode={profileData.classCode || ''} searchQuery={searchQuery} notices={notices} />;
         case 'notices': return <NoticeBoard notices={notices} setNotices={setNotices} isReadOnly={false} searchQuery={searchQuery} authorName={profileData.name} classCode={profileData.classCode || ''} />;
         case 'doubts': return <DoubtSolver messages={messages} setMessages={setMessages} userRole="teacher" userName={profileData.name} classCode={profileData.classCode || ''} searchQuery={searchQuery} />;
         case 'settings': return <ProfileSettings profile={profileData} onUpdate={updateProfile} onResetAccount={handleResetAccount} onRoleSwitch={handleRoleSwitch} />;
