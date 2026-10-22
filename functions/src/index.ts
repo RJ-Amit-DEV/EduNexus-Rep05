@@ -74,13 +74,11 @@ export const createTeacherClass = onCall({ region: REGION, cors }, async (reques
       throw new HttpsError("already-exists", "This teacher invitation has already been used.");
     }
     if (!invite.active) {
-      if (invite.claimedByUid === uid && userSnap.exists && userSnap.data()?.role === "teacher" && userSnap.data()?.classCode) return;
       throw new HttpsError("permission-denied", "The teacher invitation code is invalid or already used. Ask your institution for a valid invitation.");
     }
     if (userSnap.exists && userSnap.data()?.role && userSnap.data()?.role !== "teacher") {
       throw new HttpsError("permission-denied", "This Google account is already registered for a different portal.");
     }
-    if (userSnap.exists && userSnap.data()?.classCode) return;
     tx.update(inviteRef, { active: false, claimedByUid: uid, claimedAt: now });
     tx.create(classRef, {
       classCode, teacherUid: uid, teacherName: String(request.data?.displayName || request.auth?.token?.name || "Teacher").trim().slice(0, 120),
