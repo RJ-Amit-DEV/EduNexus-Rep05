@@ -279,6 +279,12 @@ const AppContent: React.FC = () => {
         unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const userData = docSnap.data() as ProfileData;
+            const trusted = userData as any;
+            if ((userData.role === 'student' && (!trusted.studentDocId || !trusted.studentId || !trusted.classCode)) ||
+                (userData.role === 'parent' && (!trusted.childStudentDocId || !trusted.childStudentId)) ||
+                (userData.role === 'teacher' && !trusted.classCode)) {
+              setIsLoggedIn(false); setShowRoleSelection(true); setAuthError('This account is not fully linked to an approved enrollment. Sign in through the appropriate portal and verify your institution-issued codes.'); setIsLoading(false); return;
+            }
             setProfileData(userData);
             setRole(userData.role);
             setIsLoggedIn(true);
