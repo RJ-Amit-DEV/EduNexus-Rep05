@@ -49,7 +49,7 @@ export interface PortalLoginPayload {
 }
 
 interface AuthProps {
-  onLogin: (role: UserRole, payload?: PortalLoginPayload) => void;
+  onLogin: (role: UserRole, payload?: PortalLoginPayload) => Promise<void> | void;
   onGoogleSignIn: (role: UserRole, payload: PortalLoginPayload) => void;
   onTeamDirectLogin?: (email: string, role: UserRole) => void;
   initialStep?: 'landing' | 'role';
@@ -103,23 +103,37 @@ export const Auth: React.FC<AuthProps> = ({
     }
   };
 
-  const handleStudentSubmit = (e: React.FormEvent) => {
+  const handleStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!studentAccessCode.trim()) return;
-    onLogin('student', { role: 'student', studentAccessCode: studentAccessCode.trim().toUpperCase() });
+    if (!studentAccessCode.trim() || isAuthenticating) return;
+    setIsAuthenticating(true);
+    try {
+      await onLogin('student', { role: 'student', studentAccessCode: studentAccessCode.trim().toUpperCase() });
+    } finally {
+      setIsAuthenticating(false);
+    }
   };
 
-  const handleTeacherSubmit = (e: React.FormEvent) => {
+  const handleTeacherSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!teacherClassCode.trim()) return;
-    onLogin('teacher', { role: 'teacher', name: teacherName.trim(), classCode: teacherClassCode.trim().toUpperCase() });
-    setActiveModal(null);
+    if (!teacherName.trim() || isAuthenticating) return;
+    setIsAuthenticating(true);
+    try {
+      await onLogin('teacher', { role: 'teacher', name: teacherName.trim(), classCode: teacherClassCode.trim().toUpperCase() });
+    } finally {
+      setIsAuthenticating(false);
+    }
   };
 
-  const handleParentSubmit = (e: React.FormEvent) => {
+  const handleParentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!parentAccessId.trim() || !parentName.trim()) return;
-    onLogin('parent', { role: 'parent', name: parentName.trim(), parentAccessCode: parentAccessId.trim().toUpperCase() });
+    if (!parentAccessId.trim() || !parentName.trim() || isAuthenticating) return;
+    setIsAuthenticating(true);
+    try {
+      await onLogin('parent', { role: 'parent', name: parentName.trim(), parentAccessCode: parentAccessId.trim().toUpperCase() });
+    } finally {
+      setIsAuthenticating(false);
+    }
   };
 
   const handleGoogleSignIn = async () => {
@@ -128,7 +142,7 @@ export const Auth: React.FC<AuthProps> = ({
       setActiveModal('student');
       return;
     }
-    if (!teacherName.trim()) return;
+    if (!teacherName.trim() || isAuthenticating) return;
     const payload: PortalLoginPayload = {
       role: 'teacher',
       name: teacherName.trim(),
@@ -815,7 +829,7 @@ export const Auth: React.FC<AuthProps> = ({
                         type="text"
                         value={teacherClassCode}
                         onChange={(e) => setTeacherClassCode(e.target.value.toUpperCase())}
-                        placeholder="Institution-issued teacher invitation code (new teachers)"
+                        placeholder="Institution-issued invitation code (new teachers)"
                         className="w-full px-3.5 py-2.5 bg-slate-900 border border-indigo-500/50 rounded-xl text-xs sm:text-sm text-white font-mono tracking-wider outline-none focus:border-indigo-400"
                                               />
                       <p className="text-[11px] text-slate-400 mt-1.5">
