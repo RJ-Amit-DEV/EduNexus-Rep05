@@ -25,7 +25,7 @@ import {
   Youtube
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
 import { cn } from '../lib/utils';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -35,6 +35,7 @@ import { VideoFocusPlayer } from './VideoFocusPlayer';
 import { db, auth } from '../firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, doc, getDocs, getDoc, writeBatch, limit, serverTimestamp, where, deleteDoc } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
+import { onAuthStateChanged } from 'firebase/auth';
 
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
@@ -86,22 +87,25 @@ const WELCOME_MESSAGE = (conversationId: string): Message => ({
   conversationId
 });
 
-let genAIInstance: GoogleGenAI | null = null;
-const getGenAI = (): GoogleGenAI => {
-  if (!genAIInstance) {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      throw new Error("GEMINI_API_KEY is not configured in the environment.");
-    }
-    genAIInstance = new GoogleGenAI({ apiKey: key });
-  }
-  return genAIInstance;
+const generateAIContent = async (request: { contents: unknown; config: Record<string, unknown> }) => {
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error('Please sign in to use Smart AI Scheduler.');
+  const response = await fetch('/api/generate-content', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(request)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || `AI request failed (${response.status}).`);
+  return result as { text: string };
 };
 
 export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery = '' }) => {
   const [activeConversationId, setActiveConversationId] = useState<string>(Math.random().toString(36).substring(2, 15));
+  const [authenticatedUid, setAuthenticatedUid] = useState<string | null>(auth.currentUser?.uid ?? null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [schedulesHistory, setSchedulesHistory] = useState<ScheduleHistoryItem[]>([]);
+  const [historySaveError, setHistorySaveError] = useState<string | null>(null);
   const [activeScheduleId, setActiveScheduleId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [input, setInput] = useState('');
@@ -153,6 +157,11 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
     setCurrentSchedule(null);
     setQuizResults({});
     setActiveScheduleId(null);
+    setActiveQuiz(null);
+    setViewingScheduleId(null);
+    setPastedSyllabus('');
+    setRescheduleReason('');
+    setIsRescheduling(false);
   };
 
   const handleAiError = (error: any) => {
@@ -197,8 +206,7 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
       
       Generate a REAL, detailed study schedule based EXCLUSIVELY on the syllabus text.`;
 
-      const response = await getGenAI().models.generateContent({
-        model: "gemini-3.8-flash",
+      const response = await generateAIContent({
         contents: [{
           role: 'user',
           parts: [{ text: prompt }]
@@ -254,7 +262,34 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
       
       setCurrentSchedule(data.schedule);
       setAiStatus('online');
-      
+      setHistorySaveError(null);
+
+      // Persist the schedule before chat history. A chat-write failure must not
+      // prevent the generated plan from being saved to the student's history.
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setHistorySaveError('Your schedule was generated, but you are signed out. Sign in again to save it to history.');
+      } else {
+        try {
+          const path = `users/${currentUser.uid}/schedules`;
+          const docRef = await addDoc(collection(db, path), {
+            conversationId: activeConversationId,
+            subjectName: selectedModule || (finalChapters.length === 1 ? finalChapters[0] : '') || 'Study Schedule',
+            timeline: finalTimeline,
+            mode: finalMode,
+            schedule: data.schedule,
+            syllabus: extractedSyllabus.substring(0, 50000),
+            syllabusPreview: extractedSyllabus ? extractedSyllabus.substring(0, 300) : '',
+            syllabusLength: extractedSyllabus ? extractedSyllabus.length : 0,
+            createdAt: serverTimestamp()
+          });
+          setActiveScheduleId(docRef.id);
+        } catch (historyError) {
+          console.error('Unable to save generated schedule to history:', historyError);
+          setHistorySaveError('Your schedule was generated, but it could not be saved to history. Check your connection and Firestore permissions, then try again.');
+        }
+      }
+
       const assistantMessage: Message = {
         id: Date.now().toString(),
         role: 'assistant',
@@ -263,22 +298,11 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
         showScheduleButton: true,
         conversationId: activeConversationId
       };
-      await saveMessage(assistantMessage);
-
-      // Save to history (lean metadata to prevent unbounded payload reads)
-      if (auth.currentUser) {
-        const path = `users/${auth.currentUser.uid}/schedules`;
-        const docRef = await addDoc(collection(db, path), {
-          conversationId: activeConversationId,
-          subjectName: data.subjectName || 'Study Schedule',
-          timeline: finalTimeline,
-          mode: finalMode,
-          schedule: data.schedule,
-          syllabusPreview: extractedSyllabus ? extractedSyllabus.substring(0, 300) : '',
-          syllabusLength: extractedSyllabus ? extractedSyllabus.length : 0,
-          createdAt: serverTimestamp()
-        });
-        setActiveScheduleId(docRef.id);
+      try {
+        await saveMessage(assistantMessage);
+      } catch (messageError) {
+        // Schedule persistence is independent of optional conversation persistence.
+        console.error('Unable to save scheduler conversation message:', messageError);
       }
     } catch (error) {
       handleAiError(error);
@@ -291,8 +315,7 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
   const takeQuiz = async (item: ScheduleItem) => {
     setIsLoading(true);
     try {
-      const response = await getGenAI().models.generateContent({
-        model: "gemini-3.8-flash",
+      const response = await generateAIContent({
         contents: [{
           role: 'user',
           parts: [{
@@ -345,70 +368,78 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
     }
   }, [messages]);
 
-  // Fetch messages history for active conversation
-  useEffect(() => {
-    if (!auth.currentUser || !activeConversationId) return;
-
-    const path = `users/${auth.currentUser.uid}/scheduler_messages`;
-    // Avoid composite index by only ordering, then filtering client-side
-    const q = query(
-      collection(db, path), 
-      orderBy('createdAt', 'asc')
-    );
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedMessages = snapshot.docs
-        .map(doc => ({
-          ...doc.data(),
-          id: doc.id
-        } as Message))
-        .filter(msg => msg.conversationId === activeConversationId);
-      
-      if (fetchedMessages.length > 0) {
-        setMessages(fetchedMessages);
-      } else {
-        // If no messages in Firestore for this conversation, show the welcome message
+  // Track auth changes explicitly; effects must resubscribe after sign-in/sign-out.
+  useEffect(() => onAuthStateChanged(auth, user => {
+    const nextUid = user?.uid ?? null;
+    setAuthenticatedUid(previousUid => {
+      if (previousUid !== nextUid) {
+        setSchedulesHistory([]);
+        setActiveScheduleId(null);
+        setCurrentSchedule(null);
         setMessages([WELCOME_MESSAGE(activeConversationId)]);
       }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      return nextUid;
     });
+    if (!user) {
+      setSchedulesHistory([]);
+      setActiveScheduleId(null);
+      setCurrentSchedule(null);
+      setMessages([WELCOME_MESSAGE(activeConversationId)]);
+    }
+  }), [activeConversationId]);
 
-    return () => unsubscribe();
-  }, [activeConversationId]);
-
-  // Fetch schedules history
+  // Fetch only this conversation's messages and only after auth is resolved.
   useEffect(() => {
-    if (!auth.currentUser) return;
-
-    const path = `users/${auth.currentUser.uid}/schedules`;
-    const q = query(collection(db, path), orderBy('createdAt', 'desc'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const history = snapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id
-      })) as ScheduleHistoryItem[];
-      setSchedulesHistory(history);
-      
-      // If no active conversation and history exists, load the latest
-      if (history.length > 0 && !activeScheduleId) {
-        const latest = history[0];
-        // Only set if we don't have a real conversation going
-        if (messages.length <= 1) {
-          setActiveConversationId(latest.conversationId || latest.id);
-          setCurrentSchedule(latest.schedule);
-          setSchedulingMode(latest.mode);
-          setTimeline(latest.timeline);
-          setActiveScheduleId(latest.id);
-        }
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+    if (!authenticatedUid || !activeConversationId) return;
+    const path = `users/${authenticatedUid}/scheduler_messages`;
+    const q = query(
+      collection(db, path),
+      where('conversationId', '==', activeConversationId),
+      limit(200)
+    );
+    const unsubscribe = onSnapshot(q, snapshot => {
+      const fetchedMessages = snapshot.docs.map(item => ({
+        ...item.data(),
+        id: item.id
+      } as Message)).sort((a, b) => {
+        const left = (a as any).createdAt?.toMillis?.() ?? 0;
+        const right = (b as any).createdAt?.toMillis?.() ?? 0;
+        return left - right;
+      });
+      setMessages(fetchedMessages.length ? fetchedMessages : [WELCOME_MESSAGE(activeConversationId)]);
+    }, error => {
+      console.error('Unable to load scheduler conversation history:', error);
+      setMessages([WELCOME_MESSAGE(activeConversationId)]);
     });
-
     return () => unsubscribe();
-  }, [auth.currentUser]); // Re-subscribe when user changes
+  }, [authenticatedUid, activeConversationId]);
+
+  // Load the signed-in user's schedule history, with a bounded result set.
+  useEffect(() => {
+    if (!authenticatedUid) return;
+    const path = `users/${authenticatedUid}/schedules`;
+    const q = query(collection(db, path), orderBy('createdAt', 'desc'), limit(100));
+    const unsubscribe = onSnapshot(q, snapshot => {
+      const history = snapshot.docs.map(item => ({
+        ...item.data(),
+        id: item.id
+      } as ScheduleHistoryItem));
+      setSchedulesHistory(history);
+
+    }, error => {
+      console.error('Unable to load scheduler plan history:', error);
+      setSchedulesHistory([]);
+    });
+    return () => unsubscribe();
+  }, [authenticatedUid]);
+
+  const deleteRefsInBatches = async (refs: any[]) => {
+    for (let index = 0; index < refs.length; index += 450) {
+      const batch = writeBatch(db);
+      refs.slice(index, index + 450).forEach(ref => batch.delete(ref));
+      await batch.commit();
+    }
+  };
 
   const deleteSchedule = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -431,14 +462,12 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
           await deleteDoc(scheduleRef);
           
           const msgPath = `users/${auth.currentUser!.uid}/scheduler_messages`;
-          const msgSnapshot = await getDocs(collection(db, msgPath));
           const targetConversationId = scheduleToDelete.conversationId || id;
-          
-          const deletePromises = msgSnapshot.docs
-            .filter(doc => doc.data().conversationId === targetConversationId)
-            .map(d => deleteDoc(d.ref));
-            
-          await Promise.all(deletePromises);
+          const msgSnapshot = await getDocs(query(
+            collection(db, msgPath),
+            where('conversationId', '==', targetConversationId)
+          ));
+          await deleteRefsInBatches(msgSnapshot.docs.map(item => item.ref));
 
           if (activeConversationId === targetConversationId) {
             resetAll();
@@ -470,12 +499,10 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
             getDocs(collection(db, msgPath))
           ]);
 
-          const deletePromises = [
-            ...schedulesSnap.docs.map(d => deleteDoc(d.ref)),
-            ...msgsSnap.docs.map(d => deleteDoc(d.ref))
-          ];
-
-          await Promise.all(deletePromises);
+          await deleteRefsInBatches([
+            ...schedulesSnap.docs.map(item => item.ref),
+            ...msgsSnap.docs.map(item => item.ref)
+          ]);
           resetAll();
           setShowHistory(false);
         } catch (error) {
@@ -497,8 +524,8 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
     setTimelineInput(item.timeline);
     if (item.syllabus) {
       setExtractedSyllabus(item.syllabus);
-    } else if (item.syllabusPreview) {
-      setExtractedSyllabus(item.syllabusPreview);
+    } else {
+      setExtractedSyllabus('');
     }
     setShowHistory(false);
   };
@@ -610,8 +637,7 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
   const extractModules = async (text: string, customMessage?: string) => {
     setIsLoading(true);
     try {
-      const response = await getGenAI().models.generateContent({
-        model: "gemini-3.8-flash",
+      const response = await generateAIContent({
         contents: [{
           role: 'user',
           parts: [{
@@ -714,8 +740,7 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
     await saveMessage(userMessage);
 
     try {
-      const response = await getGenAI().models.generateContent({
-        model: "gemini-3.8-flash",
+      const response = await generateAIContent({
         contents: [{
           role: 'user',
           parts: [{
@@ -940,9 +965,8 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
         }
 
         // Check relevance first
-        const relevanceCheck = await getGenAI().models.generateContent({
-          model: "gemini-3.8-flash",
-          contents: [{
+        const relevanceCheck = await generateAIContent({
+            contents: [{
             role: 'user',
             parts: [{ text: `Is the following text related to academic study, a syllabus, or a learning schedule? Answer only 'YES' or 'NO'.\n\nText: ${currentInput.substring(0, 1000)}` }]
           }],
@@ -996,15 +1020,12 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
 
     setIsLoading(true);
     try {
-      const model = "gemini-3.8-flash";
-      
       const prompt = `Reschedule my current plan. 
       Reason for rescheduling: ${rescheduleReason}. 
       Timeline: ${timeline}.
       Please provide an updated schedule in the same tabular JSON format.`;
       
-      const response = await getGenAI().models.generateContent({
-        model,
+      const response = await generateAIContent({
         contents: prompt,
         config: {
           systemInstruction: "You are a smart academic scheduler. Adjust the schedule based on the user's reason for rescheduling. Return a JSON object with 'message' and 'schedule' array.",
@@ -1163,6 +1184,11 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {historySaveError && (
+                <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">
+                  {historySaveError}
+                </div>
+              )}
               <button 
                 onClick={resetAll}
                 className="w-full p-4 bg-white border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 hover:border-indigo-600 hover:text-indigo-600 transition-all flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest"

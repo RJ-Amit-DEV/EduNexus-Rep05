@@ -963,12 +963,12 @@ export const Auth: React.FC<AuthProps> = ({
                         type="text"
                         value={parentAccessId}
                         onChange={(e) => setParentAccessId(e.target.value.toUpperCase())}
-                        placeholder="e.g. PAR-4042"
+                        placeholder="Institution-provided Parent Access ID"
                         className="w-full px-3.5 py-2.5 bg-slate-900 border border-emerald-500/50 rounded-xl text-xs sm:text-sm text-white font-mono tracking-wider outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
                         required
                       />
                       <p className="text-[11px] text-slate-400 mt-1.5">
-                        Enter the exact Parent Access ID shown in your child's student dashboard. The code must match one unique student record.
+                        This code is only an identifier, not proof of identity. Sign in with the Google account verified by your institution; the account must already be linked to this student.
                       </p>
                     </div>
 

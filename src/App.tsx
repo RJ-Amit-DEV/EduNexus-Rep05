@@ -53,7 +53,7 @@ const getDemoStudentRecord = (): Student | null => {
         student.studentId?.trim().toUpperCase() === 'STU-4042' ||
         student.parentId?.trim().toUpperCase() === 'PAR-4042'
       );
-      if (matches.length === 1) return matches[0];
+      if (matches.length === 1) return { ...matches[0], cgpa: matches[0].cgpa ?? matches[0].sem4 ?? '' };
       if (matches.length > 1) {
         console.error('Demo student IDs are duplicated; refusing to display ambiguous academic data.');
       }
@@ -68,7 +68,7 @@ const getDemoStudentRecord = (): Student | null => {
     studentId: 'STU-4042',
     parentId: 'PAR-4042',
     name: 'Aarav Sharma',
-    sem4: '9.24',
+    cgpa: '9.24',
     ia1: 19,
     ia2: 18,
     attendance: 92,
@@ -218,63 +218,40 @@ const AppContent: React.FC = () => {
     calculateScore();
   }, [consistencyData.attendance, consistencyData.quizPassRate, consistencyData.deadlinesMet, consistencyData.studyHours]);
 
-  // Handle Parent-Child Data Sync (Prioritizing Parent Access ID & Student ID)
+  // Parent academic records are available only to an authenticated parent whose trusted
+  // profile is linked to both the exact Parent ID and Student ID.
   useEffect(() => {
     if (!isLoggedIn || role !== 'parent') {
-      return;
-    }
-
-    const targetParentId = profileData.parentId?.trim().toUpperCase();
-    if (!targetParentId) {
       setChildAcademicRecord(null);
       return;
     }
-
-    // The explicitly labelled demo account uses its paired demo record, not production cache rows.
     if (profileData.uid.startsWith('demo-')) return;
 
-    // Portal-code mode may use the local cache, but only an exact Parent Access ID match is valid.
-    try {
-      const localStr = localStorage.getItem('eduplan_local_students');
-      if (localStr) {
-        const list: Student[] = JSON.parse(localStr);
-        const matches = list.filter(s => s.parentId?.trim().toUpperCase() === targetParentId);
-        if (matches.length === 1) setChildAcademicRecord(matches[0]);
-        else {
-          setChildAcademicRecord(null);
-          if (matches.length > 1) console.error(`Duplicate Parent Access ID detected in local cache: ${targetParentId}`);
-        }
-      }
-    } catch {
+    const targetParentId = profileData.parentId?.trim().toUpperCase();
+    const targetStudentId = profileData.childStudentId?.trim().toUpperCase();
+    if (!auth.currentUser || auth.currentUser.uid !== profileData.uid || !targetParentId || !targetStudentId) {
       setChildAcademicRecord(null);
+      return;
     }
 
-    // Portal-code sessions resolve only from their exact local record. Do not query Firestore
-    // using a possibly unrelated Firebase session.
-    if (!auth.currentUser || profileData.uid.startsWith('parent-') || profileData.uid.startsWith('demo-')) return;
-
-    // Firestore is authoritative. Never substitute another child or invented grades.
-    const studentsQuery = query(collection(db, 'students'), where('parentId', '==', targetParentId));
-    const unsubscribeChildStudent = onSnapshot(studentsQuery, (snapshot) => {
+    const studentsQuery = query(
+      collection(db, 'students'),
+      where('parentId', '==', targetParentId),
+      where('studentId', '==', targetStudentId)
+    );
+    const unsubscribe = onSnapshot(studentsQuery, snapshot => {
       if (snapshot.size !== 1) {
-        if (snapshot.size > 1) {
-          console.error(`Parent Access ID ${targetParentId} matches multiple Firestore student records.`);
-        }
+        if (snapshot.size > 1) console.error('Linked parent/student IDs are duplicated; refusing to show academic data.');
         setChildAcademicRecord(null);
         return;
       }
-      const studentData = snapshot.docs[0].data();
-      setChildAcademicRecord({ id: snapshot.docs[0].id, ...studentData });
-    }, (error) => {
-      console.warn("Child student sync failed:", error);
-      // Do not leave stale data visible after a failed lookup.
+      setChildAcademicRecord({ id: snapshot.docs[0].id, ...snapshot.docs[0].data(), cgpa: snapshot.docs[0].data().cgpa ?? snapshot.docs[0].data().sem4 ?? '' } as Student);
+    }, error => {
+      console.error('Parent academic record access failed:', error);
       setChildAcademicRecord(null);
     });
-
-    return () => {
-      unsubscribeChildStudent();
-    };
-  }, [isLoggedIn, role, profileData.parentId, profileData.childStudentId, profileData.childName]);
+    return () => unsubscribe();
+  }, [isLoggedIn, role, profileData.uid, profileData.parentId, profileData.childStudentId]);
 
   // Handle Student's Academic Record Sync (from Teacher's List)
   useEffect(() => {
@@ -297,7 +274,7 @@ const AppContent: React.FC = () => {
       if (localStr) {
         const list: Student[] = JSON.parse(localStr);
         const matches = list.filter(s => s.studentId?.trim().toUpperCase() === currentStudentId);
-        if (matches.length === 1) setStudentAcademicRecord(matches[0]);
+        if (matches.length === 1) setStudentAcademicRecord({ ...matches[0], cgpa: matches[0].cgpa ?? matches[0].sem4 ?? '' });
         else {
           setStudentAcademicRecord(null);
           if (matches.length > 1) console.error(`Duplicate Student ID detected in local cache: ${currentStudentId}`);
@@ -312,7 +289,7 @@ const AppContent: React.FC = () => {
 
     const q = query(collection(db, 'students'), where('studentId', '==', currentStudentId));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setStudentAcademicRecord(snapshot.size === 1 ? { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } : null);
+      setStudentAcademicRecord(snapshot.size === 1 ? { id: snapshot.docs[0].id, ...snapshot.docs[0].data(), cgpa: snapshot.docs[0].data().cgpa ?? snapshot.docs[0].data().sem4 ?? '' } as Student : null);
       if (snapshot.size > 1) console.error(`Student ID ${currentStudentId} matches multiple Firestore records.`);
     }, (error) => {
       console.warn("Student academic record sync failed:", error);
@@ -427,7 +404,10 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!isLoggedIn) {
+    // Demo/team portal sessions may be local-only and have no Firebase Auth identity.
+    // Do not start Firestore listeners for those sessions; doing so creates predictable
+    // permission errors and misleading "using defaults" warnings.
+    if (!isLoggedIn || !auth.currentUser) {
       setNotices(DEFAULT_NOTICES);
       setMessages(DEFAULT_MESSAGES);
       setUnreadCounts({ notices: 0, doubts: 0 });
@@ -557,61 +537,29 @@ const AppContent: React.FC = () => {
   const handleSwitchParentId = async (inputKey: string) => {
     const cleanKey = inputKey.trim().toUpperCase();
     if (!cleanKey) return;
-    let matches: Student[] = [];
 
-    // A parent code must match exactly one record. Never match by name or derived ID.
+    // Only the explicitly labelled demo may switch sample children. Real parents cannot
+    // select a child by guessing another parent's short access code.
+    if (!profileData.uid.startsWith('demo-')) {
+      setAuthError('A parent-child link must be verified by the institution. Contact the school administrator to correct your linked student record.');
+      return;
+    }
+
     try {
       const localStr = localStorage.getItem('eduplan_local_students');
-      if (localStr) {
-        const list: Student[] = JSON.parse(localStr);
-        matches = list.filter(s => s.parentId?.trim().toUpperCase() === cleanKey);
+      const list: Student[] = localStr ? JSON.parse(localStr) : [];
+      const matches = list.filter(student => student.parentId?.trim().toUpperCase() === cleanKey);
+      if (matches.length !== 1) {
+        setChildAcademicRecord(null);
+        setAuthError(matches.length > 1 ? 'This demo Parent Access ID is duplicated.' : 'No demo student record found for that Parent Access ID.');
+        return;
       }
-    } catch (e) {}
-
-    if (matches.length > 1) {
+      setChildAcademicRecord(matches[0]);
+      setAuthError(null);
+    } catch {
       setChildAcademicRecord(null);
-      alert(`Parent Access ID ${cleanKey} is duplicated in the local student cache. The records need to be deduplicated before this code can safely identify a child.`);
-      return;
+      setAuthError('Unable to load the demo student record.');
     }
-
-    let match: Student | null = matches[0] || null;
-
-    // Query Firestore only for an authenticated account; local portal sessions use local data only.
-    if (!match && auth.currentUser && !profileData.uid.startsWith('parent-') && !profileData.uid.startsWith('demo-')) {
-      try {
-        const snap = await getDocs(query(collection(db, 'students'), where('parentId', '==', cleanKey)));
-        if (snap.size > 1) {
-          setChildAcademicRecord(null);
-          alert(`Parent Access ID ${cleanKey} matches multiple Firestore records. Please resolve duplicate IDs before viewing this report.`);
-          return;
-        }
-        if (!snap.empty) match = { id: snap.docs[0].id, ...snap.docs[0].data() } as Student;
-      } catch (e) {
-        console.warn('Could not verify Parent Access ID against Firestore:', e);
-      }
-    }
-
-    if (!match) {
-      setChildAcademicRecord(null);
-      alert(`No student record found for Parent Access ID ${cleanKey}. Verify the code; no sample data was substituted.`);
-      return;
-    }
-
-    setChildAcademicRecord(match);
-    const updatedProfile: ProfileData = {
-      ...profileData,
-      parentId: match.parentId,
-      childStudentId: match.studentId,
-      childName: match.name
-    };
-    setProfileData(updatedProfile);
-    try {
-      const localUserStr = localStorage.getItem('eduplan_local_user');
-      if (localUserStr) {
-        const parsed = JSON.parse(localUserStr);
-        localStorage.setItem('eduplan_local_user', JSON.stringify({ ...parsed, ...updatedProfile }));
-      }
-    } catch (e) {}
   };
 
   const handleLogin = async (selectedRole: UserRole, payload?: PortalLoginPayload) => {
@@ -658,7 +606,7 @@ const AppContent: React.FC = () => {
             classCode: sClass,
             rollNo: sRoll,
             name: sName,
-            sem4: "",
+            cgpa: "",
             ia1: 0,
             ia2: 0,
             attendance: 0,
@@ -681,11 +629,17 @@ const AppContent: React.FC = () => {
             localStorage.setItem('eduplan_local_students', JSON.stringify(cachedList));
           } catch (e) {}
 
-          // Also persist into Firestore if accessible
-          try {
-            await setDoc(doc(db, 'students', `student-${sId}`), studentRecord, { merge: true });
-          } catch (e) {
-            console.warn("Could not save student to Firestore:", e);
+          // Demo portal enrollment is local-only. Persist to Firestore only when a
+          // real Firebase-authenticated account exists; otherwise security rules reject it.
+          if (auth.currentUser) {
+            try {
+              await setDoc(doc(db, 'students', `student-${sId}`), {
+                ...studentRecord,
+                createdByUid: auth.currentUser.uid
+              }, { merge: true });
+            } catch (e) {
+              console.warn("Could not save student to Firestore:", e);
+            }
           }
 
           const sProfile: ProfileData = {
@@ -716,68 +670,72 @@ const AppContent: React.FC = () => {
         }
 
         if (selectedRole === 'parent') {
-          const pName = payload.name || 'Parent Guardian';
-          const pId = payload.parentId || 'PAR-4042';
-          let matchedStudents: Student[] = [];
-          try {
-            const cachedStr = localStorage.getItem('eduplan_local_students');
-            if (cachedStr) {
-              const list: Student[] = JSON.parse(cachedStr);
-              matchedStudents = list.filter(s => s.parentId?.trim().toUpperCase() === pId);
-            }
-          } catch (e) {}
+          let signedInUser = auth.currentUser;
+          const requestedParentId = payload.parentId?.trim().toUpperCase();
 
-          if (matchedStudents.length > 1) {
-            setAuthError(`Parent Access ID ${pId} is duplicated in local data. Please resolve duplicate IDs before viewing a report.`);
+          if (!requestedParentId) {
+            setAuthError('Enter the Parent Access ID supplied by your institution.');
+            setChildAcademicRecord(null);
+            return;
+          }
+          if (!signedInUser) {
+            const provider = new GoogleAuthProvider();
+            const signInResult = await signInWithPopup(auth, provider);
+            signedInUser = signInResult.user;
+          }
+
+          const parentProfileSnapshot = await getDoc(doc(db, 'users', signedInUser.uid));
+          if (!parentProfileSnapshot.exists()) {
+            setAuthError('This parent account has not been linked by the institution yet. Please contact the school administrator.');
             setChildAcademicRecord(null);
             return;
           }
 
-          let matchedStudent: Student | null = matchedStudents[0] || null;
-          if (!matchedStudent && auth.currentUser) {
-            try {
-              const snap = await getDocs(query(collection(db, 'students'), where('parentId', '==', pId)));
-              if (snap.size > 1) {
-                setAuthError(`Parent Access ID ${pId} matches multiple student records. Please resolve duplicate IDs first.`);
-                setChildAcademicRecord(null);
-                return;
-              }
-              if (!snap.empty) matchedStudent = { id: snap.docs[0].id, ...snap.docs[0].data() } as Student;
-            } catch (e) {
-              console.warn('Could not verify parent code against Firestore:', e);
-            }
-          }
-
-          if (!matchedStudent) {
+          const trustedProfile = parentProfileSnapshot.data() as ProfileData;
+          const trustedParentId = trustedProfile.parentId?.trim().toUpperCase();
+          const trustedStudentId = trustedProfile.childStudentId?.trim().toUpperCase();
+          if (
+            trustedProfile.role !== 'parent' ||
+            trustedParentId !== requestedParentId ||
+            !trustedStudentId
+          ) {
+            setAuthError('This Google account is not verified for that Parent Access ID. Contact the school administrator if the link is incorrect.');
             setChildAcademicRecord(null);
-            setAuthError(`No student record is linked to Parent Access ID ${pId}. Check the code and try again; no sample report was loaded.`);
             return;
           }
 
-          const pProfile: ProfileData = {
-            uid: `parent-${pId}`,
-            name: pName,
-            email: 'parent.guardian@edunexus.edu',
-            role: 'parent',
-            avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
-            about: `Parent of ${matchedStudent.name} (Roll No: ${matchedStudent.rollNo})`,
-            childName: matchedStudent.name,
-            childStudentId: matchedStudent.studentId,
-            parentId: pId,
-            relationship: 'Guardian',
-            contact: '+91 98200 12345'
+          const linkedSnapshot = await getDocs(query(
+            collection(db, 'students'),
+            where('parentId', '==', trustedParentId),
+            where('studentId', '==', trustedStudentId)
+          ));
+          if (linkedSnapshot.size !== 1) {
+            setAuthError(linkedSnapshot.size > 1
+              ? 'The linked student record is duplicated. The school administrator must resolve it.'
+              : 'No matching student record is linked to this parent account.');
+            setChildAcademicRecord(null);
+            return;
+          }
+
+          const linkedData = linkedSnapshot.docs[0].data();
+          const linkedStudent = { id: linkedSnapshot.docs[0].id, ...linkedData, cgpa: linkedData.cgpa ?? linkedData.sem4 ?? '' } as Student;
+          const verifiedProfile: ProfileData = {
+            ...trustedProfile,
+            uid: signedInUser.uid,
+            parentId: trustedParentId,
+            childStudentId: trustedStudentId,
+            childName: linkedStudent.name
           };
-
-          setChildAcademicRecord(matchedStudent);
-          setProfileData(pProfile);
+          setChildAcademicRecord(linkedStudent);
+          setProfileData(verifiedProfile);
           setRole('parent');
           setIsLoggedIn(true);
           setShowRoleSelection(false);
           setAuthError(null);
           setActiveTab('performance');
-          localStorage.setItem('eduplan_local_user', JSON.stringify({ ...pProfile, isLocalDemo: true }));
           return;
         }
+
       }
 
       // 2. Google Sign-In Fallback if no payload passed
@@ -801,7 +759,7 @@ const AppContent: React.FC = () => {
 
       const userDoc = await getDoc(doc(db, 'users', loggedInUser.uid));
       if (!userDoc.exists()) {
-        const initialStudentId = selectedRole === 'student' ? generateStudentId() : undefined;
+        const initialStudentId = undefined;
         const initialProfile: ProfileData = {
           uid: loggedInUser.uid,
           name: loggedInUser.displayName || 'New User',
@@ -813,13 +771,14 @@ const AppContent: React.FC = () => {
           course: 'B.E. Information Technology',
           semester: 'Semester IV',
           classCode: selectedRole === 'teacher' ? DEFAULT_TEACHER_CLASS_CODE : undefined,
-          studentId: initialStudentId,
-          parentId: initialStudentId ? generateParentId(initialStudentId) : undefined
+          studentId: undefined,
+          parentId: undefined
         };
-        await setDoc(doc(db, 'users', loggedInUser.uid), {
-          ...initialProfile,
-          updatedAt: serverTimestamp()
-        });
+        const profileToSave = Object.fromEntries(
+          Object.entries({ ...initialProfile, updatedAt: serverTimestamp() })
+            .filter(([, value]) => value !== undefined)
+        );
+        await setDoc(doc(db, 'users', loggedInUser.uid), profileToSave);
         setProfileData(initialProfile);
         setRole(selectedRole);
       } else {
@@ -994,14 +953,15 @@ const AppContent: React.FC = () => {
   };
 
   const handleRoleSwitch = async (newRole: UserRole) => {
-    const isPrivileged = isPrivilegedTeamMember(profileData.email) || profileData.isPrivileged || profileData.email?.includes('eduplan.local');
+    // Privilege must come from the trusted team-email allowlist, not editable client profile data.
+    const isPrivileged = isPrivilegedTeamMember(profileData.email);
     if (!isPrivileged) return;
 
     setRole(newRole);
     const updatedProfile = {
       ...profileData,
       role: newRole,
-      isPrivileged: true
+      isPrivileged: isPrivilegedTeamMember(profileData.email)
     };
     setProfileData(updatedProfile);
 
@@ -1022,7 +982,7 @@ const AppContent: React.FC = () => {
     // Sync to Firestore if authenticated
     if (user) {
       try {
-        await setDoc(doc(db, 'users', user.uid), { role: newRole, isPrivileged: true, updatedAt: serverTimestamp() }, { merge: true });
+        await setDoc(doc(db, 'users', user.uid), { role: newRole, isPrivileged: isPrivilegedTeamMember(profileData.email), updatedAt: serverTimestamp() }, { merge: true });
       } catch (e) {
         console.warn("Could not sync role change to Firestore:", e);
       }
@@ -1073,19 +1033,17 @@ const AppContent: React.FC = () => {
         return; // User cancelled, ignore
       }
       console.error("Sign In Error:", error);
-      if (error.code === 'auth/unauthorized-domain' || error.code === 'auth/popup-blocked' || error.code === 'auth/operation-not-allowed') {
-        handleLogin('student', {
-          role: 'student',
-          name: 'Aarav Sharma',
-          classCode: DEFAULT_TEACHER_CLASS_CODE
-        });
-        return;
-      }
-      let message = "Unable to sign in with Google.";
-      if (error.message) {
-        message = error.message;
-      }
-      setAuthError(message);
+
+      // Never silently create a demo session when real Google authentication fails.
+      // Doing so makes failed authentication look successful and can expose the wrong
+      // demo profile. Show the actionable Firebase error instead.
+      const authMessages: Record<string, string> = {
+        'auth/unauthorized-domain': 'This site is not authorised for Firebase sign-in. Add the exact local hostname in Firebase Authentication settings.',
+        'auth/popup-blocked': 'Your browser blocked the Google sign-in popup. Allow popups for this site and try again.',
+        'auth/operation-not-allowed': 'Google sign-in is disabled for this Firebase project. Enable the Google provider in Firebase Authentication.',
+        'auth/popup-closed-by-user': 'Google sign-in was cancelled.'
+      };
+      setAuthError(authMessages[error.code] || error.message || 'Unable to sign in with Google. Please try again.');
     }
   };
 
@@ -1161,14 +1119,14 @@ const AppContent: React.FC = () => {
       }
     } else if (role === 'parent') {
       switch (activeTab) {
-        case 'performance': return <ParentDashboard childData={childAcademicRecord} searchQuery={searchQuery} parentName={profileData.name} parentId={profileData.parentId} studentId={profileData.childStudentId} onSwitchParentId={handleSwitchParentId} />;
+        case 'performance': return <ParentDashboard childData={childAcademicRecord} searchQuery={searchQuery} parentName={profileData.name} parentId={profileData.parentId} studentId={profileData.childStudentId} onSwitchParentId={handleSwitchParentId} allowDemoLinking={profileData.uid.startsWith('demo-')} />;
         case 'notices': return <NoticeBoard notices={notices} setNotices={setNotices} isReadOnly={true} searchQuery={searchQuery} />;
         case 'college-info':
         case 'blogs':
         case 'contact':
-          return <ParentDashboard childData={childAcademicRecord} activeTab={activeTab} searchQuery={searchQuery} parentName={profileData.name} parentId={profileData.parentId} studentId={profileData.childStudentId} onSwitchParentId={handleSwitchParentId} />;
+          return <ParentDashboard childData={childAcademicRecord} activeTab={activeTab} searchQuery={searchQuery} parentName={profileData.name} parentId={profileData.parentId} studentId={profileData.childStudentId} onSwitchParentId={handleSwitchParentId} allowDemoLinking={profileData.uid.startsWith('demo-')} />;
         case 'settings': return <ProfileSettings profile={profileData} onUpdate={updateProfile} onResetAccount={handleResetAccount} onRoleSwitch={handleRoleSwitch} />;
-        default: return <ParentDashboard childData={childAcademicRecord} activeTab={activeTab} searchQuery={searchQuery} parentName={profileData.name} parentId={profileData.parentId} studentId={profileData.childStudentId} onSwitchParentId={handleSwitchParentId} />;
+        default: return <ParentDashboard childData={childAcademicRecord} activeTab={activeTab} searchQuery={searchQuery} parentName={profileData.name} parentId={profileData.parentId} studentId={profileData.childStudentId} onSwitchParentId={handleSwitchParentId} allowDemoLinking={profileData.uid.startsWith('demo-')} />;
       }
     }
     return null;
