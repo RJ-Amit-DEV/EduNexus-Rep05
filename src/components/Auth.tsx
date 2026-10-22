@@ -34,10 +34,7 @@ import { UserRole } from '../types';
 import { cn } from '../lib/utils';
 import { PRIVILEGED_TEAM_EMAILS } from '../constants';
 import { 
-  DEFAULT_TEACHER_CLASS_CODE, 
-  generateStudentId, 
-  generateParentId,
-  deriveStudentIdFromParentId 
+  DEFAULT_TEACHER_CLASS_CODE 
 } from '../lib/id-generator';
 
 export interface PortalLoginPayload {
@@ -51,7 +48,7 @@ export interface PortalLoginPayload {
 
 interface AuthProps {
   onLogin: (role: UserRole, payload?: PortalLoginPayload) => void;
-  onGoogleSignIn: () => void;
+  onGoogleSignIn: (role: UserRole, payload: PortalLoginPayload) => void;
   onTeamDirectLogin?: (email: string, role: UserRole) => void;
   initialStep?: 'landing' | 'role';
   authError?: string | null;
@@ -73,18 +70,18 @@ export const Auth: React.FC<AuthProps> = ({
   const [contactSent, setContactSent] = useState(false);
 
   // Student Form State
-  const [studentName, setStudentName] = useState('Aarav Sharma');
-  const [studentRollNo, setStudentRollNo] = useState('INFTT-1-042');
-  const [studentClassCode, setStudentClassCode] = useState(DEFAULT_TEACHER_CLASS_CODE);
+  const [studentName, setStudentName] = useState('');
+  const [studentRollNo, setStudentRollNo] = useState('');
+  const [studentClassCode, setStudentClassCode] = useState('');
 
   // Teacher Form State
-  const [teacherName, setTeacherName] = useState('Prof. Amit Jadhav');
+  const [teacherName, setTeacherName] = useState('');
   const [teacherDept, setTeacherDept] = useState('Information Technology');
-  const [teacherClassCode, setTeacherClassCode] = useState(DEFAULT_TEACHER_CLASS_CODE);
+  const [teacherClassCode, setTeacherClassCode] = useState('');
 
   // Parent Form State
   const [parentAccessId, setParentAccessId] = useState('');
-  const [parentName, setParentName] = useState('Rajesh Sharma');
+  const [parentName, setParentName] = useState('');
 
   const [isIpAddressHost, setIsIpAddressHost] = useState(false);
 
@@ -107,53 +104,45 @@ export const Auth: React.FC<AuthProps> = ({
 
   const handleStudentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!studentClassCode.trim()) return;
-    
-    // Auto generate Student ID and Paired Parent ID
-    const studentId = generateStudentId();
-    const parentId = generateParentId(studentId);
-
-    onLogin('student', {
-      role: 'student',
-      name: studentName.trim() || 'Aarav Sharma',
-      rollNo: studentRollNo.trim() || 'INFTT-1-042',
-      classCode: studentClassCode.trim().toUpperCase(),
-      studentId,
-      parentId
-    });
+    if (!studentRollNo.trim() || !studentClassCode.trim()) return;
+    onLogin('student', { role: 'student', name: studentName.trim(), rollNo: studentRollNo.trim().toUpperCase(), classCode: studentClassCode.trim().toUpperCase() });
     setActiveModal(null);
   };
 
   const handleTeacherSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onLogin('teacher', {
-      role: 'teacher',
-      name: teacherName.trim() || 'Prof. Amit Jadhav',
-      classCode: teacherClassCode.trim().toUpperCase() || DEFAULT_TEACHER_CLASS_CODE,
-    });
+    if (!teacherClassCode.trim()) return;
+    onLogin('teacher', { role: 'teacher', name: teacherName.trim(), classCode: teacherClassCode.trim().toUpperCase() });
     setActiveModal(null);
   };
 
   const handleParentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!parentAccessId.trim()) return;
-    const cleanParentId = parentAccessId.trim().toUpperCase();
-    const derivedStudentId = deriveStudentIdFromParentId(cleanParentId);
-
-    onLogin('parent', {
-      role: 'parent',
-      name: parentName.trim() || 'Parent Guardian',
-      parentId: cleanParentId,
-      studentId: derivedStudentId
-    });
+    onLogin('parent', { role: 'parent', name: parentName.trim(), parentId: parentAccessId.trim().toUpperCase() });
     setActiveModal(null);
   };
 
   const handleGoogleSignIn = async () => {
     if (isAuthenticating) return;
+    if (activeModal !== 'teacher' && activeModal !== 'student' && activeModal !== 'parent') {
+      setActiveModal('student');
+      return;
+    }
+    let payload: PortalLoginPayload;
+    if (activeModal === 'teacher') {
+      if (!teacherClassCode.trim()) return;
+      payload = { role: 'teacher', name: teacherName.trim(), classCode: teacherClassCode.trim().toUpperCase() };
+    } else if (activeModal === 'student') {
+      if (!studentRollNo.trim() || !studentClassCode.trim()) return;
+      payload = { role: 'student', name: studentName.trim(), rollNo: studentRollNo.trim().toUpperCase(), classCode: studentClassCode.trim().toUpperCase() };
+    } else {
+      if (!parentAccessId.trim()) return;
+      payload = { role: 'parent', name: parentName.trim(), parentId: parentAccessId.trim().toUpperCase() };
+    }
     setIsAuthenticating(true);
     try {
-      await onGoogleSignIn();
+      await onGoogleSignIn(activeModal, payload);
     } finally {
       setIsAuthenticating(false);
     }
@@ -765,7 +754,7 @@ export const Auth: React.FC<AuthProps> = ({
                         type="text"
                         value={studentRollNo}
                         onChange={(e) => setStudentRollNo(e.target.value)}
-                        placeholder="e.g. INFTT-1-042"
+                        placeholder="Your registered roll number"
                         className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs sm:text-sm text-white font-mono placeholder-slate-500 outline-none focus:border-blue-500"
                         required
                       />
@@ -780,22 +769,22 @@ export const Auth: React.FC<AuthProps> = ({
                         </label>
                         <button
                           type="button"
-                          onClick={() => setStudentClassCode(DEFAULT_TEACHER_CLASS_CODE)}
+                          onClick={() => setStudentClassCode('')}
                           className="text-[10px] text-blue-400 hover:text-blue-300 font-bold underline cursor-pointer"
                         >
-                          Use Demo ({DEFAULT_TEACHER_CLASS_CODE})
+                          Clear class code
                         </button>
                       </div>
                       <input 
                         type="text"
                         value={studentClassCode}
                         onChange={(e) => setStudentClassCode(e.target.value.toUpperCase())}
-                        placeholder="e.g. CLS-4921"
+                        placeholder="Institution-issued teacher invitation code"
                         className="w-full px-3.5 py-2.5 bg-slate-900 border border-amber-500/50 rounded-xl text-xs sm:text-sm text-white font-mono tracking-wider placeholder-slate-500 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
                         required
                       />
                       <p className="text-[11px] text-slate-400 mt-1.5">
-                        Enrolls you under that teacher. Automatically generates your <strong>Student ID</strong> and paired <strong>Parent Access ID</strong>.
+                        Enrolls you under that teacher. Your teacher must register your roll number first. Use the class code provided by your teacher.
                       </p>
                     </div>
 
@@ -874,7 +863,7 @@ export const Auth: React.FC<AuthProps> = ({
                     <div>
                       <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
                         <KeyRound size={13} className="text-indigo-400" />
-                        <span>Class Enrollment Code</span>
+                        <span>Institution Teacher Invitation Code</span>
                       </label>
                       <input 
                         type="text"
@@ -885,7 +874,7 @@ export const Auth: React.FC<AuthProps> = ({
                         required
                       />
                       <p className="text-[11px] text-slate-400 mt-1.5">
-                        Share this code with students. Their entries will appear directly in your dashboard roster.
+                        After your institution verifies the invitation, EduNexus generates your unique class code.
                       </p>
                     </div>
 

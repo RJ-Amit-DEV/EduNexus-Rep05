@@ -59,8 +59,9 @@ import { STUDENT_PERFORMANCE } from '../constants';
 import { cn } from '../lib/utils';
 import * as XLSX from 'xlsx';
 import { db, auth } from '../firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, query, updateDoc, doc, setDoc, addDoc, deleteDoc, serverTimestamp, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, updateDoc, doc, addDoc, deleteDoc, serverTimestamp, where, getDocs } from 'firebase/firestore';
 import { ConsistencyData, Student } from '../types';
 import { Notice } from './NoticeBoard';
 import { DEFAULT_TEACHER_CLASS_CODE, generateStudentId, generateParentId } from '../lib/id-generator';
@@ -148,11 +149,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [newStudent, setNewStudent] = useState({
     name: '',
     rollNo: '',
-    cgpa: '9.20',
-    ia1: 18,
-    ia2: 17,
-    attendance: 92,
-    quizPass: 86
+    cgpa: '',
+    ia1: 0,
+    ia2: 0,
+    attendance: 0,
+    quizPass: 0
   });
 
   // Sync internal searchTerm with global searchQuery
@@ -166,44 +167,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     let unsubscribeStudents: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      if (!currentUser) {
-        const localCached = localStorage.getItem('eduplan_local_students');
-        if (localCached) {
-          try {
-            const cachedStudents: Student[] = (JSON.parse(localCached) as Student[]).map(student => ({ ...student, cgpa: student.cgpa ?? student.sem4 ?? '' }));
-            // Migrate the explicitly seeded demo row so PAR-4042 always identifies the advertised demo child.
-            const demoIndex = cachedStudents.findIndex(s => s.id === 'student-initial-42');
-            if (demoIndex >= 0) {
-              cachedStudents[demoIndex] = {
-                ...cachedStudents[demoIndex],
-                studentId: 'STU-4042',
-                parentId: 'PAR-4042',
-                rollNo: 'INFTT-1-042',
-                name: 'Aarav Sharma',
-                cgpa: '9.24',
-                ia1: 19,
-                ia2: 18,
-                attendance: 92,
-                quizPass: 88
-              };
-              localStorage.setItem('eduplan_local_students', JSON.stringify(cachedStudents));
-            }
-            setStudents(cachedStudents);
-          } catch {
-            const initial = generateInitialStudents();
-            setStudents(initial);
-            localStorage.setItem('eduplan_local_students', JSON.stringify(initial));
-          }
-        } else {
-          const initial = generateInitialStudents();
-          setStudents(initial);
-          localStorage.setItem('eduplan_local_students', JSON.stringify(initial));
-        }
-        return;
-      }
+      if (!currentUser) { setStudents([]); return; }
 
       // Scope the teacher roster to the active teacher's class; do not seed fake records into production.
-      const q = query(collection(db, 'students'), where('classCode', '==', classCode));
+      const q = query(collection(db, 'students'), where('teacherUid', '==', currentUser.uid), where('classCode', '==', classCode));
       unsubscribeStudents = onSnapshot(q, (snapshot) => {
         const seenIds = new Set<string>();
         const studentData: Student[] = [];
@@ -246,7 +213,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     try {
       await updateDoc(doc(db, 'students', id), {
         name: editStudent.name,
-        rollNo: editStudent.rollNo,
         cgpa: editStudent.cgpa,
         ia1: editStudent.ia1,
         ia2: editStudent.ia2,
@@ -261,53 +227,25 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
   const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStudent.name.trim() || !newStudent.rollNo.trim()) return;
-
-    const nextSeed = 4000 + students.length + 1;
-    const studentId = generateStudentId(nextSeed);
-    const parentId = generateParentId(nextSeed);
-    const assignedClassCode = classCode || DEFAULT_TEACHER_CLASS_CODE;
-
-    const createdStudent: Student = {
-      id: `student-${Date.now()}`,
-      studentId,
-      parentId,
-      classCode: assignedClassCode,
-      name: newStudent.name.trim(),
-      rollNo: newStudent.rollNo.trim().toUpperCase(),
-      cgpa: newStudent.cgpa || "9.00",
-      ia1: Number(newStudent.ia1) || 18,
-      ia2: Number(newStudent.ia2) || 17,
-      attendance: Number(newStudent.attendance) || 90,
-      quizPass: Number(newStudent.quizPass) || 85,
-      batch: "INFTT-1",
-      college: "Institute of Engineering & Technology",
-      course: "B.E. Information Technology"
-    };
-
-    try {
-      const docRef = await addDoc(collection(db, 'students'), createdStudent);
-      createdStudent.id = docRef.id;
-    } catch (err) {
-      console.warn("Could not save to Firestore, saving locally:", err);
+    if (!newStudent.name.trim() || !newStudent.rollNo.trim() || !auth.currentUser) {
+      window.alert('Sign in as a teacher and enter the student name and roll number.');
+      return;
     }
-
-    const updated = [createdStudent, ...students];
-    setStudents(updated);
     try {
-      localStorage.setItem('eduplan_local_students', JSON.stringify(updated));
-    } catch {}
-
-    setShowAddStudentModal(false);
-    setNewStudent({
-      name: '',
-      rollNo: '',
-      cgpa: '9.20',
-      ia1: 18,
-      ia2: 17,
-      attendance: 92,
-      quizPass: 86
-    });
+      const addStudent = httpsCallable(getFunctions(auth.app, 'us-central1'), 'addStudentToClass');
+      const response = await addStudent({
+        classCode, name: newStudent.name.trim(), rollNo: newStudent.rollNo.trim().toUpperCase(),
+        cgpa: newStudent.cgpa, ia1: newStudent.ia1, ia2: newStudent.ia2,
+        attendance: newStudent.attendance, quizPass: newStudent.quizPass
+      });
+      const created = response.data as { studentDocId: string; studentId: string; parentCode: string; classCode: string; rollNo: string };
+      window.alert('Student registered successfully.\nStudent ID: ' + created.studentId + '\nParent access code (shown once): ' + created.parentCode + '\nShare the parent code privately with the guardian. It cannot be recovered from the database.');
+      setShowAddStudentModal(false);
+      setNewStudent({ name: '', rollNo: '', cgpa: '', ia1: 0, ia2: 0, attendance: 0, quizPass: 0 });
+    } catch (error: any) {
+      console.error('Student registration failed:', error);
+      window.alert(error?.message || 'Unable to register student. Check your connection and try again.');
+    }
   };
 
   const handleDeleteStudent = async (id: string, name: string) => {
@@ -347,26 +285,31 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [reportGenerated, setReportGenerated] = useState(false);
 
   const handlePostNotice = async () => {
-    if (!noticeTitle.trim() || !noticeContent.trim()) return;
+    if (!noticeTitle.trim() || !noticeContent.trim() || !auth.currentUser) return;
     setIsPosting(true);
     try {
+      let recipientUids: string[] = [];
+      if (targetAudience === 'specific') {
+        const found = await getDocs(query(collection(db, 'students'),
+          where('teacherUid', '==', auth.currentUser.uid),
+          where('classCode', '==', classCode),
+          where('rollNo', '==', targetRollNo.trim().toUpperCase())));
+        if (found.size !== 1) throw new Error('No student with that roll number exists in your class.');
+        const student = found.docs[0].data();
+        recipientUids = [student.studentUid, student.parentUid].filter((uid): uid is string => typeof uid === 'string' && uid.length > 0);
+        if (!recipientUids.length) throw new Error('The selected student and parent have not linked their accounts yet.');
+      }
       await addDoc(collection(db, 'notices'), {
-        title: noticeTitle,
-        content: noticeContent,
-        date: serverTimestamp(),
-        author: teacherName,
-        type: 'Academic',
-        attachments: [],
-        targetAudience,
-        targetRollNo: targetAudience === 'specific' ? targetRollNo : null
+        title: noticeTitle.trim(), content: noticeContent.trim(), date: serverTimestamp(),
+        author: teacherName, authorId: auth.currentUser.uid, teacherUid: auth.currentUser.uid,
+        classCode, type: 'Academic', attachments: [], targetAudience, recipientUids,
+        targetRollNo: targetAudience === 'specific' ? targetRollNo.trim().toUpperCase() : null
       });
-      setNoticeTitle('');
-      setNoticeContent('');
-      setTargetRollNo('');
-      setPostSuccess(true);
-      setTimeout(() => setPostSuccess(false), 3000);
-    } catch (error) {
-      console.error("Error posting notice:", error);
+      setNoticeTitle(''); setNoticeContent(''); setTargetRollNo('');
+      setPostSuccess(true); setTimeout(() => setPostSuccess(false), 3000);
+    } catch (error: any) {
+      console.error('Error posting notice:', error);
+      window.alert(error?.message || 'Unable to post notice.');
     } finally {
       setIsPosting(false);
     }
