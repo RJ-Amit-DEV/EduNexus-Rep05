@@ -12,7 +12,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { db, auth } from '../firebase';
-import { collection, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
 
 export interface Notice {
   id: string;
@@ -33,6 +33,7 @@ export interface NoticeBoardProps {
   isReadOnly?: boolean;
   searchQuery?: string;
   authorName?: string;
+  classCode: string;
 }
 
 export const NoticeBoard: React.FC<NoticeBoardProps> = ({ notices, isReadOnly = false, searchQuery = '', authorName }) => {
@@ -49,34 +50,33 @@ export const NoticeBoard: React.FC<NoticeBoardProps> = ({ notices, isReadOnly = 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !content) return;
-
+    if (!title.trim() || !content.trim() || !auth.currentUser || !classCode) return;
     setIsPosting(true);
     try {
-      const recipientUid = targetRollNo.trim();
-      if (targetAudience === 'specific' && !recipientUid) {
-        window.alert('Enter the recipient Firebase Auth UID for a specific notice.');
-        return;
+      let recipientUids: string[] = [];
+      const recipientRollNo = targetRollNo.trim().toUpperCase();
+      if (targetAudience === 'specific') {
+        if (!recipientRollNo) throw new Error('Enter the student roll number for the specific notice.');
+        const found = await getDocs(query(collection(db, 'students'),
+          where('teacherUid', '==', auth.currentUser.uid),
+          where('classCode', '==', classCode),
+          where('rollNo', '==', recipientRollNo)));
+        if (found.size !== 1) throw new Error('No student with that roll number exists in your class.');
+        const student = found.docs[0].data();
+        recipientUids = [student.studentUid, student.parentUid].filter((uid): uid is string => typeof uid === 'string' && uid.length > 0);
+        if (!recipientUids.length) throw new Error('That student and parent have not linked their accounts yet.');
       }
-
-      const newNotice = {
-        title,
-        content,
-        date: serverTimestamp(),
-        attachments: [], // In a real app, we'd handle file uploads
-        authorId: auth.currentUser?.uid || 'dev-teacher-id',
-        author: authorName || auth.currentUser?.displayName || 'Faculty Member',
-        targetAudience,
-        targetRollNo: targetAudience === 'specific' ? targetRollNo : null,
-        recipientUids: targetAudience === 'specific' ? [recipientUid] : []
-      };
-
-      await addDoc(collection(db, 'notices'), newNotice);
-      setTitle('');
-      setContent('');
-      setTargetRollNo('');
-    } catch (error) {
-      console.error("Error posting notice:", error);
+      await addDoc(collection(db, 'notices'), {
+        title: title.trim(), content: content.trim(), date: serverTimestamp(), attachments: [],
+        authorId: auth.currentUser.uid, teacherUid: auth.currentUser.uid,
+        author: authorName || auth.currentUser.displayName || 'Faculty Member',
+        classCode, targetAudience, targetRollNo: targetAudience === 'specific' ? recipientRollNo : null,
+        recipientUids
+      });
+      setTitle(''); setContent(''); setTargetRollNo('');
+    } catch (error: any) {
+      console.error('Error posting notice:', error);
+      window.alert(error?.message || 'Unable to post notice.');
     } finally {
       setIsPosting(false);
     }
@@ -151,12 +151,12 @@ export const NoticeBoard: React.FC<NoticeBoardProps> = ({ notices, isReadOnly = 
                       animate={{ opacity: 1, scale: 1 }}
                       className="space-y-3"
                     >
-                      <label className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Enter recipient Firebase Auth UID</label>
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Student roll number</label>
                       <input 
                         type="text" 
                         value={targetRollNo}
                         onChange={(e) => setTargetRollNo(e.target.value)}
-                        placeholder="e.g., paste the recipient's Firebase UID"
+                        placeholder="e.g., INFTT-1-042"
                         className="w-full px-8 py-5 bg-slate-50 border-2 border-transparent focus:bg-white focus:border-indigo-100 rounded-none text-lg font-semibold text-slate-700 outline-none transition-all"
                       />
                     </motion.div>

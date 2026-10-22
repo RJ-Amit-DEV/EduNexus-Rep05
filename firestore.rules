@@ -20,7 +20,16 @@ service cloud.firestore {
     }
     match /users/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
-      allow create, update, delete: if false;
+      allow create, delete: if false;
+      allow update: if signedIn() && request.auth.uid == uid &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.get('classCode', null) == resource.data.get('classCode', null) &&
+        request.resource.data.get('studentId', null) == resource.data.get('studentId', null) &&
+        request.resource.data.get('parentId', null) == resource.data.get('parentId', null) &&
+        request.resource.data.get('studentDocId', null) == resource.data.get('studentDocId', null) &&
+        request.resource.data.get('childStudentDocId', null) == resource.data.get('childStudentDocId', null) &&
+        request.resource.data.get('childStudentId', null) == resource.data.get('childStudentId', null) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'avatar', 'about', 'contact', 'relationship', 'consistencyData', 'updatedAt']);
       match /{subcollection}/{docId} {
         allow read, write: if signedIn() && request.auth.uid == uid;
       }
@@ -46,7 +55,8 @@ service cloud.firestore {
       );
       allow list: if profileExists() && me().role == 'teacher' &&
         resource.data.teacherUid == request.auth.uid;
-      allow create, delete: if false;
+      allow create: if false;
+      allow delete: if profileExists() && me().role == 'teacher' && resource.data.teacherUid == request.auth.uid;
       allow update: if profileExists() && me().role == 'teacher' &&
         resource.data.teacherUid == request.auth.uid &&
         request.resource.data.teacherUid == resource.data.teacherUid &&
@@ -99,7 +109,7 @@ service cloud.firestore {
         request.resource.data.content.size() <= 5000;
       allow update: if false;
       allow delete: if profileExists() && me().role == 'teacher' &&
-        resource.data.teacherUid == request.auth.uid;
+        resource.data.classCode == me().classCode;
     }
   }
 }

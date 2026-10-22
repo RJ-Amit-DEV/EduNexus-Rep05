@@ -144,6 +144,7 @@ export const claimStudentEnrollment = onCall({ region: REGION, cors }, async (re
     if (userSnap.exists && userSnap.data()?.role && userSnap.data()?.role !== "student") {
       throw new HttpsError("permission-denied", "This Google account is already registered for a different portal.");
     }
+    if (userSnap.exists && userSnap.data()?.studentDocId && userSnap.data()?.studentDocId !== studentRef.id) throw new HttpsError("already-exists", "This Google account is already linked to a different student.");
     if (student.studentUid && student.studentUid !== uid) {
       throw new HttpsError("already-exists", "This student enrollment has already been claimed by another Google account. Contact your teacher if you need account recovery.");
     }
@@ -173,6 +174,7 @@ export const claimParentAccess = onCall({ region: REGION, cors }, async (request
     if (userSnap.exists && userSnap.data()?.role && userSnap.data()?.role !== "parent") {
       throw new HttpsError("permission-denied", "This Google account is already registered for a different portal.");
     }
+    if (userSnap.exists && userSnap.data()?.childStudentDocId && userSnap.data()?.childStudentDocId !== link.studentDocId) throw new HttpsError("already-exists", "This parent account is already linked to a different student.");
     const studentRef = db.doc("students/" + link.studentDocId);
     const studentSnap = await tx.get(studentRef);
     if (!studentSnap.exists) throw new HttpsError("not-found", "The student record linked to this code no longer exists.");

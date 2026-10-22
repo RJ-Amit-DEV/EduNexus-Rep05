@@ -38,6 +38,8 @@ export interface ProfileData {
   // Parent specific
   childName?: string;
   childStudentId?: string;
+  studentDocId?: string;
+  childStudentDocId?: string;
   relationship?: string;
   contact?: string;
   updatedAt?: any;

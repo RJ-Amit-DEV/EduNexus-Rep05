@@ -19,7 +19,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
 import { cn } from '../lib/utils';
 import { db, auth } from '../firebase';
-import { collection, addDoc, serverTimestamp, deleteDoc, doc, getDocs, writeBatch, query, limit, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, deleteDoc, doc, getDocs, writeBatch, query, limit, onSnapshot, where } from 'firebase/firestore';
 import { ProfileData } from '../types';
 
 export interface Message {
@@ -37,12 +37,13 @@ export interface DoubtSolverProps {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   userRole: 'teacher' | 'student';
   userName: string;
+  classCode: string;
   searchQuery?: string;
 }
 
 const DEV_BYPASS_ACTIVE = process.env.NODE_ENV !== 'production'; // Bypass the schedule only in local development.
 
-export const DoubtSolver: React.FC<DoubtSolverProps> = ({ messages, setMessages, userRole, userName, searchQuery = '' }) => {
+export const DoubtSolver: React.FC<DoubtSolverProps> = ({ messages, setMessages, userRole, userName, classCode, searchQuery = '' }) => {
   const [newMessage, setNewMessage] = useState('');
   const [isActive, setIsActive] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -126,6 +127,7 @@ export const DoubtSolver: React.FC<DoubtSolverProps> = ({ messages, setMessages,
       const msg = {
         sender: nameToUse,
         role: roleToUse,
+        classCode,
         content: newMessage || (simulatedRole === 'student' ? "Sir, can you explain the latest assignment?" : "Please check the notice board for updates."),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         createdAt: serverTimestamp(),
@@ -159,7 +161,7 @@ export const DoubtSolver: React.FC<DoubtSolverProps> = ({ messages, setMessages,
     if (!window.confirm("Are you sure you want to clear the entire chat history for everyone? This cannot be undone.")) return;
     setIsClearing(true);
     try {
-      const q = query(collection(db, 'messages'));
+      const q = query(collection(db, 'messages'), where('classCode', '==', classCode));
       const snapshot = await getDocs(q);
       const batch = writeBatch(db);
       snapshot.docs.forEach((doc) => {
