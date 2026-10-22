@@ -377,22 +377,32 @@ const AppContent: React.FC = () => {
       return;
     }
 
+    // Enrollment/profile snapshots can arrive one render after Firebase Auth changes.
+    // Never pass an undefined classCode into a Firestore where() constraint.
+    const classCode = typeof profileData.classCode === 'string' ? profileData.classCode.trim() : '';
+    if (!classCode) {
+      setNotices([]);
+      setMessages([]);
+      setUnreadCounts({ notices: 0, doubts: 0 });
+      return;
+    }
+
     // Query only audiences the signed-in role is permitted to read.
     // Firestore rules do not filter query results; each query must be authorized as a whole.
     const noticeCollection = collection(db, 'notices');
     const audienceQueries = role === 'teacher'
-      ? [query(noticeCollection, where('classCode', '==', profileData.classCode), orderBy('date', 'desc'), limit(50))]
+      ? [query(noticeCollection, where('classCode', '==', classCode), orderBy('date', 'desc'), limit(50))]
       : role === 'student'
         ? [
-            query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
-            query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'students'), orderBy('date', 'desc'), limit(50)),
-            query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
+            query(noticeCollection, where('classCode', '==', classCode), where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
+            query(noticeCollection, where('classCode', '==', classCode), where('targetAudience', '==', 'students'), orderBy('date', 'desc'), limit(50)),
+            query(noticeCollection, where('classCode', '==', classCode), where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
           ]
         : role === 'parent'
           ? [
-              query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
-              query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'parents'), orderBy('date', 'desc'), limit(50)),
-              query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
+              query(noticeCollection, where('classCode', '==', classCode), where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
+              query(noticeCollection, where('classCode', '==', classCode), where('targetAudience', '==', 'parents'), orderBy('date', 'desc'), limit(50)),
+              query(noticeCollection, where('classCode', '==', classCode), where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
             ]
           : [];
 
@@ -418,7 +428,7 @@ const AppContent: React.FC = () => {
     );
 
     // Listen for messages
-    const messagesQuery = query(collection(db, 'messages'), where('classCode', '==', profileData.classCode), orderBy('createdAt', 'asc'), limit(100));
+    const messagesQuery = query(collection(db, 'messages'), where('classCode', '==', classCode), orderBy('createdAt', 'asc'), limit(100));
     const unsubscribeMessages = onSnapshot(messagesQuery, (snapshot) => {
       const seenMsgIds = new Set<string>();
       const newMessages: Message[] = [];
@@ -442,7 +452,7 @@ const AppContent: React.FC = () => {
       unsubscribeNotices.forEach((unsubscribe) => unsubscribe());
       unsubscribeMessages();
     };
-  }, [isLoggedIn, role, profileData.rollNo, childAcademicRecord?.rollNo]);
+  }, [isLoggedIn, role, profileData.classCode, profileData.rollNo, childAcademicRecord?.rollNo]);
 
   // Handle unread counts logic
   useEffect(() => {
