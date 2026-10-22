@@ -37,10 +37,10 @@ npm --prefix functions run build
 firebase deploy --project gen-lang-client-0344681124 --only functions,firestore:rules,firestore:indexes
 ```
 
-Deploy Cloud Functions and Firestore rules/indexes before publishing the new frontend. Review the Firebase CLI's function update/delete plan carefully; the legacy Google/roll-number claim endpoints now return a failed-precondition error.
+**Plan a coordinated maintenance-window cutover.** This changes the student/parent authentication contract: the new frontend calls `redeemPortalAccessCode`, while the old frontend calls legacy claim endpoints that now return a failed-precondition error. Deploy the Functions and rules/indexes, then publish the new frontend immediately and verify sign-in; student/parent sign-in will be interrupted between the two versions. Do not merge/publish this frontend while you cannot deploy the matching backend.
 
 ## Data migration and rollout
-The rules intentionally deny legacy records that lack trusted `teacherUid`, `studentUid`, and `parentUid` links. Back up the database, verify identities, and migrate legacy documents with an Admin SDK script before production cutover. Do not infer parent identity from old `PAR-####` identifiers. Existing student records need new private access-code documents created by an administrator or by re-registering them through the teacher dashboard.
+The rules intentionally deny legacy records that lack trusted `teacherUid`, `studentUid`, and `parentUid` links. Back up the named database, verify identities, and complete a reviewed Admin SDK migration before production cutover. Do not infer parent identity from old `PAR-####` identifiers. Existing student records require new private student-code documents and new parent links; simply re-registering the same roll number will be rejected as a duplicate. Previously Google-linked records need explicit identity review before their old UID links are replaced.
 
 ## Manual release acceptance checklist
 - Teacher A signs in with invitation A and receives class code A.
