@@ -4,7 +4,8 @@ import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
 initializeApp();
-const db = getFirestore();
+const FIRESTORE_DATABASE_ID = "ai-studio-185f624b-3a40-477e-8250-23627f389344";
+const db = getFirestore(undefined, FIRESTORE_DATABASE_ID);
 const REGION = "us-central1";
 const VERCEL_ORIGIN = "https://edu-nexus-rep05.vercel.app";
 const cors = [VERCEL_ORIGIN, "http://localhost:3000", "http://localhost:5173"];
@@ -93,6 +94,7 @@ export const addStudentToClass = onCall({ region: REGION, cors }, async (request
   const studentRef = db.collection("students").doc();
   const studentId = randomCode("STU-", 6);
   const parentCode = randomCode("PAR-", 16);
+  const parentId = randomCode("PAR-ID-", 6);
   const parentCodeHash = hash(parentCode);
   const parentLinkRef = db.doc("parentLinks/" + parentCodeHash);
   const cgpa = validMark(request.data?.cgpa, "CGPA", 0, 10);
@@ -112,7 +114,7 @@ export const addStudentToClass = onCall({ region: REGION, cors }, async (request
     }
     if (!existing.empty) throw new HttpsError("already-exists", "That roll number is already registered in this class.");
     tx.create(studentRef, {
-      studentId, parentId: parentCode, parentLinkId: parentCodeHash,
+      studentId, parentId, parentLinkId: parentCodeHash,
       classCode, teacherUid: uid, studentUid: null, parentUid: null,
       rollNo, name, cgpa: cgpa ?? "", ia1: ia1 ?? 0, ia2: ia2 ?? 0,
       attendance: attendance ?? 0, quizPass: quizPass ?? 0,
