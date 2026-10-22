@@ -1,4 +1,10 @@
 {
   "functions": { "source": "functions", "runtime": "nodejs20" },
-  "firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" }
+  "firestore": [
+    {
+      "database": "ai-studio-185f624b-3a40-477e-8250-23627f389344",
+      "rules": "firestore.rules",
+      "indexes": "firestore.indexes.json"
+    }
+  ]
 }
