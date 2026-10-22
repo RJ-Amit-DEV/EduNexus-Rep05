@@ -40,7 +40,7 @@ export interface DoubtSolverProps {
   searchQuery?: string;
 }
 
-const DEV_BYPASS_ACTIVE = true; // Set to true to test chat outside of Sundays
+const DEV_BYPASS_ACTIVE = process.env.NODE_ENV !== 'production'; // Bypass the schedule only in local development.
 
 export const DoubtSolver: React.FC<DoubtSolverProps> = ({ messages, setMessages, userRole, userName, searchQuery = '' }) => {
   const [newMessage, setNewMessage] = useState('');
