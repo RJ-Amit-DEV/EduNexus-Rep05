@@ -23,7 +23,8 @@ export interface Notice {
   authorId: string;
   author?: string;
   targetAudience?: 'all' | 'students' | 'parents' | 'specific';
-  targetRollNo?: string;\n  recipientUids?: string[];
+  targetRollNo?: string;
+  recipientUids?: string[];
 }
 
 export interface NoticeBoardProps {
@@ -52,7 +53,13 @@ export const NoticeBoard: React.FC<NoticeBoardProps> = ({ notices, isReadOnly = 
 
     setIsPosting(true);
     try {
-      const recipientUid = targetRollNo.trim();\n      if (targetAudience === 'specific' && !recipientUid) {\n        window.alert('Enter the recipient Firebase Auth UID for a specific notice.');\n        return;\n      }\n\n      const newNotice = {
+      const recipientUid = targetRollNo.trim();
+      if (targetAudience === 'specific' && !recipientUid) {
+        window.alert('Enter the recipient Firebase Auth UID for a specific notice.');
+        return;
+      }
+
+      const newNotice = {
         title,
         content,
         date: serverTimestamp(),
@@ -60,7 +67,8 @@ export const NoticeBoard: React.FC<NoticeBoardProps> = ({ notices, isReadOnly = 
         authorId: auth.currentUser?.uid || 'dev-teacher-id',
         author: authorName || auth.currentUser?.displayName || 'Faculty Member',
         targetAudience,
-        targetRollNo: targetAudience === 'specific' ? targetRollNo : null,\n        recipientUids: targetAudience === 'specific' ? [recipientUid] : []
+        targetRollNo: targetAudience === 'specific' ? targetRollNo : null,
+        recipientUids: targetAudience === 'specific' ? [recipientUid] : []
       };
 
       await addDoc(collection(db, 'notices'), newNotice);
