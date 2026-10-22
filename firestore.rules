@@ -119,17 +119,37 @@ service cloud.firestore {
       allow delete: if isSuperUser() || teacherOwnsClass(resource.data.classCode);
     }
 
-    // Global Institutional Notice Board
+    // Global Institutional Notice Board.
+    // Only authenticated teachers can publish notices; authors or teachers can remove them.
     match /notices/{noticeId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        userProfile().role == 'teacher' &&
+        request.resource.data.authorId == request.auth.uid &&
+        request.resource.data.title is string &&
+        request.resource.data.content is string &&
+        request.resource.data.targetAudience in ['all', 'students', 'parents', 'specific'];
+      allow update: if false;
+      allow delete: if isSuperUser() ||
+        (isAuthenticated() &&
+          (resource.data.authorId == request.auth.uid || userProfile().role == 'teacher'));
     }
 
-    // Global Doubt Solver Discussions
+    // Global Doubt Solver Discussions.
+    // Messages must be authored by the signed-in account with its server-stored role.
     match /messages/{messageId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        userProfile().role in ['teacher', 'student'] &&
+        request.resource.data.authorId == request.auth.uid &&
+        request.resource.data.role == userProfile().role &&
+        request.resource.data.content is string &&
+        request.resource.data.content.size() > 0 &&
+        request.resource.data.content.size() <= 5000;
+      allow update: if false;
+      allow delete: if isSuperUser() ||
+        (isAuthenticated() &&
+          (resource.data.authorId == request.auth.uid || userProfile().role == 'teacher'));
     }
   }
 }

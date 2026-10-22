@@ -13,7 +13,6 @@ import {
   X,
   AlertCircle,
   MessageSquare,
-  UserPlus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
@@ -115,28 +114,23 @@ export const DoubtSolver: React.FC<DoubtSolverProps> = ({ messages, setMessages,
     }
   }, [messages]);
 
-  const handleSendMessage = async (e?: React.FormEvent, simulatedRole?: 'teacher' | 'student') => {
+  const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if ((!newMessage.trim() && !simulatedRole) || !isActive) return;
+    if (!newMessage.trim() || !isActive || !auth.currentUser) return;
 
     try {
-      const roleToUse = simulatedRole || userRole;
-      const nameToUse = simulatedRole ? (simulatedRole === 'teacher' ? 'Prof. Sharma' : 'Rahul K.') : userName;
-      
       const msg = {
-        sender: nameToUse,
-        role: roleToUse,
-        content: newMessage || (simulatedRole === 'student' ? "Sir, can you explain the latest assignment?" : "Please check the notice board for updates."),
+        sender: userName,
+        role: userRole,
+        content: newMessage.trim(),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         createdAt: serverTimestamp(),
-        authorId: simulatedRole ? `sim-${simulatedRole}-123` : (auth.currentUser?.uid || `dev-${userRole}-${userName}`)
+        authorId: auth.currentUser.uid
       };
 
       await addDoc(collection(db, 'messages'), msg);
-      if (!simulatedRole) {
-        setNewMessage('');
-        setShowEmojiPicker(false);
-      }
+      setNewMessage('');
+      setShowEmojiPicker(false);
     } catch (error) {
       console.error("Error sending message:", error);
     }
@@ -231,16 +225,6 @@ export const DoubtSolver: React.FC<DoubtSolverProps> = ({ messages, setMessages,
         </div>
 
         <div className="flex items-center gap-2 ml-4">
-          {userRole === 'teacher' && (
-            <button 
-              onClick={() => handleSendMessage(undefined, 'student')}
-              className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
-              title="Post Student Inquiry Sample"
-            >
-              <UserPlus size={18} />
-            </button>
-          )}
-
           {!isSearchVisible && (
             <button 
               onClick={() => setIsSearchVisible(true)}
