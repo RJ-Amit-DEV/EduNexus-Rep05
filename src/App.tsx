@@ -27,6 +27,7 @@ import type { Notice } from './components/NoticeBoard';
 import type { Message } from './components/DoubtSolver';
 import { PortalLoginPayload } from './components/Auth';
 import { db, auth } from './firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ProfileData, ConsistencyData, Student } from './types';
 import { DEFAULT_NOTICES, DEFAULT_MESSAGES, isPrivilegedTeamMember } from './constants';
 import { handleFirestoreError, OperationType } from './lib/firestore-errors';
@@ -227,31 +228,19 @@ const AppContent: React.FC = () => {
     }
     if (profileData.uid.startsWith('demo-')) return;
 
-    const targetParentId = profileData.parentId?.trim().toUpperCase();
-    const targetStudentId = profileData.childStudentId?.trim().toUpperCase();
-    if (!auth.currentUser || auth.currentUser.uid !== profileData.uid || !targetParentId || !targetStudentId) {
+    const studentDocId = (profileData as any).childStudentDocId;
+    if (!auth.currentUser || auth.currentUser.uid !== profileData.uid || !studentDocId) {
       setChildAcademicRecord(null);
       return;
     }
-
-    const studentsQuery = query(
-      collection(db, 'students'),
-      where('parentId', '==', targetParentId),
-      where('studentId', '==', targetStudentId)
-    );
-    const unsubscribe = onSnapshot(studentsQuery, snapshot => {
-      if (snapshot.size !== 1) {
-        if (snapshot.size > 1) console.error('Linked parent/student IDs are duplicated; refusing to show academic data.');
-        setChildAcademicRecord(null);
-        return;
-      }
-      setChildAcademicRecord({ id: snapshot.docs[0].id, ...snapshot.docs[0].data(), cgpa: snapshot.docs[0].data().cgpa ?? snapshot.docs[0].data().sem4 ?? '' } as Student);
+    const unsubscribe = onSnapshot(doc(db, 'students', studentDocId), snapshot => {
+      setChildAcademicRecord(snapshot.exists() ? { id: snapshot.id, ...snapshot.data(), cgpa: snapshot.data().cgpa ?? snapshot.data().sem4 ?? '' } as Student : null);
     }, error => {
       console.error('Parent academic record access failed:', error);
       setChildAcademicRecord(null);
     });
     return () => unsubscribe();
-  }, [isLoggedIn, role, profileData.uid, profileData.parentId, profileData.childStudentId]);
+  }, [isLoggedIn, role, profileData.uid, (profileData as any).childStudentDocId]);
 
   // Handle Student's Academic Record Sync (from Teacher's List)
   useEffect(() => {
@@ -259,45 +248,19 @@ const AppContent: React.FC = () => {
       return;
     }
 
-    const currentStudentId = profileData.studentId?.trim().toUpperCase();
-    if (!currentStudentId) {
+    const studentDocId = (profileData as any).studentDocId;
+    if (!auth.currentUser || auth.currentUser.uid !== profileData.uid || !studentDocId) {
       setStudentAcademicRecord(null);
       return;
     }
-
-    // The explicitly labelled demo account uses its paired demo record, not production cache rows.
-    if (profileData.uid.startsWith('demo-')) return;
-
-    // Match by the stable student ID only; names and roll numbers are not identity keys.
-    try {
-      const localStr = localStorage.getItem('eduplan_local_students');
-      if (localStr) {
-        const list: Student[] = JSON.parse(localStr);
-        const matches = list.filter(s => s.studentId?.trim().toUpperCase() === currentStudentId);
-        if (matches.length === 1) setStudentAcademicRecord({ ...matches[0], cgpa: matches[0].cgpa ?? matches[0].sem4 ?? '' });
-        else {
-          setStudentAcademicRecord(null);
-          if (matches.length > 1) console.error(`Duplicate Student ID detected in local cache: ${currentStudentId}`);
-        }
-      }
-    } catch {
-      setStudentAcademicRecord(null);
-    }
-
-    // Portal-code/demo sessions use the exact local cache; don't query with an unrelated auth session.
-    if (!auth.currentUser || profileData.uid.startsWith('student-')) return;
-
-    const q = query(collection(db, 'students'), where('studentId', '==', currentStudentId));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setStudentAcademicRecord(snapshot.size === 1 ? { id: snapshot.docs[0].id, ...snapshot.docs[0].data(), cgpa: snapshot.docs[0].data().cgpa ?? snapshot.docs[0].data().sem4 ?? '' } as Student : null);
-      if (snapshot.size > 1) console.error(`Student ID ${currentStudentId} matches multiple Firestore records.`);
-    }, (error) => {
-      console.warn("Student academic record sync failed:", error);
+    const unsubscribe = onSnapshot(doc(db, 'students', studentDocId), snapshot => {
+      setStudentAcademicRecord(snapshot.exists() ? { id: snapshot.id, ...snapshot.data(), cgpa: snapshot.data().cgpa ?? snapshot.data().sem4 ?? '' } as Student : null);
+    }, error => {
+      console.error('Student academic record sync failed:', error);
       setStudentAcademicRecord(null);
     });
-
     return () => unsubscribe();
-  }, [isLoggedIn, role, profileData.studentId]);
+  }, [isLoggedIn, role, profileData.uid, (profileData as any).studentDocId]);
 
   // Shared State for Notices and Doubt Solver
   const [notices, setNotices] = useState<Notice[]>(DEFAULT_NOTICES);
@@ -418,17 +381,17 @@ const AppContent: React.FC = () => {
     // Firestore rules do not filter query results; each query must be authorized as a whole.
     const noticeCollection = collection(db, 'notices');
     const audienceQueries = role === 'teacher'
-      ? [query(noticeCollection, orderBy('date', 'desc'), limit(50))]
+      ? [query(noticeCollection, where('classCode', '==', profileData.classCode), orderBy('date', 'desc'), limit(50))]
       : role === 'student'
         ? [
-            query(noticeCollection, where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
-            query(noticeCollection, where('targetAudience', '==', 'students'), orderBy('date', 'desc'), limit(50)),
-            query(noticeCollection, where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
+            query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
+            query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'students'), orderBy('date', 'desc'), limit(50)),
+            query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
           ]
         : role === 'parent'
           ? [
               query(noticeCollection, where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
-              query(noticeCollection, where('targetAudience', '==', 'parents'), orderBy('date', 'desc'), limit(50)),
+              query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'parents'), orderBy('date', 'desc'), limit(50)),
               query(noticeCollection, where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
             ]
           : [];
@@ -455,7 +418,7 @@ const AppContent: React.FC = () => {
     );
 
     // Listen for messages
-    const messagesQuery = query(collection(db, 'messages'), orderBy('createdAt', 'asc'), limit(100));
+    const messagesQuery = query(collection(db, 'messages'), where('classCode', '==', profileData.classCode), orderBy('createdAt', 'asc'), limit(100));
     const unsubscribeMessages = onSnapshot(messagesQuery, (snapshot) => {
       const seenMsgIds = new Set<string>();
       const newMessages: Message[] = [];
@@ -552,266 +515,52 @@ const AppContent: React.FC = () => {
 
   const handleLogin = async (selectedRole: UserRole, payload?: PortalLoginPayload) => {
     try {
-      // 1. Frictionless Portal Modal Login with specific Class Code & ID logic
-      if (payload) {
-        if (selectedRole === 'teacher') {
-          const tName = payload.name || 'Prof. Amit Jadhav';
-          const tCode = payload.classCode || DEFAULT_TEACHER_CLASS_CODE;
-          const tProfile: ProfileData = {
-            uid: 'local-teacher-01',
-            name: tName,
-            email: 'amit.jadhav@edunexus.edu',
-            role: 'teacher',
-            avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-            about: `Associate Professor & Class Advisor for class ${tCode}.`,
-            college: 'Institute of Engineering & Technology',
-            department: 'Information Technology',
-            designation: 'Associate Professor & Class In-charge',
-            experience: '15 Years',
-            classCode: tCode
-          };
-          setProfileData(tProfile);
-          setRole('teacher');
-          setIsLoggedIn(true);
-          setShowRoleSelection(false);
-          setAuthError(null);
-          setActiveTab('my-class');
-          localStorage.setItem('eduplan_local_user', JSON.stringify({ ...tProfile, isLocalDemo: true }));
-          return;
-        }
-
-        if (selectedRole === 'student') {
-          const sName = payload.name || 'Aarav Sharma';
-          const sRoll = payload.rollNo || 'INFTT-1-042';
-          const sClass = payload.classCode || DEFAULT_TEACHER_CLASS_CODE;
-          const sId = payload.studentId || generateStudentId();
-          const pId = payload.parentId || generateParentId(sId);
-
-          const studentRecord: Student = {
-            id: `student-${sId}`,
-            studentId: sId,
-            parentId: pId,
-            classCode: sClass,
-            rollNo: sRoll,
-            name: sName,
-            cgpa: "",
-            ia1: 0,
-            ia2: 0,
-            attendance: 0,
-            quizPass: 0,
-            batch: "INFTT-1",
-            college: "Institute of Engineering & Technology",
-            course: "B.E. Information Technology"
-          };
-
-          // Update local student cache so teacher roster immediately reflects this student
-          try {
-            const cachedStr = localStorage.getItem('eduplan_local_students');
-            const cachedList: Student[] = cachedStr ? JSON.parse(cachedStr) : [];
-            const existingIdx = cachedList.findIndex(s => s.studentId === sId || s.rollNo === sRoll);
-            if (existingIdx >= 0) {
-              cachedList[existingIdx] = { ...cachedList[existingIdx], ...studentRecord };
-            } else {
-              cachedList.unshift(studentRecord);
-            }
-            localStorage.setItem('eduplan_local_students', JSON.stringify(cachedList));
-          } catch (e) {}
-
-          // Demo portal enrollment is local-only. Persist to Firestore only when a
-          // real Firebase-authenticated account exists; otherwise security rules reject it.
-          if (auth.currentUser) {
-            try {
-              await setDoc(doc(db, 'students', `student-${sId}`), {
-                ...studentRecord,
-                createdByUid: auth.currentUser.uid
-              }, { merge: true });
-            } catch (e) {
-              console.warn("Could not save student to Firestore:", e);
-            }
-          }
-
-          const sProfile: ProfileData = {
-            uid: `student-${sId}`,
-            name: sName,
-            email: `${sName.toLowerCase().replace(/\s+/g, '.')}@edunexus.edu`,
-            role: 'student',
-            avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150',
-            about: `Student enrolled in Class ${sClass} • Roll No: ${sRoll}`,
-            college: 'Institute of Engineering & Technology',
-            course: 'B.E. Information Technology',
-            semester: 'Semester 4',
-            rollNo: sRoll,
-            classCode: sClass,
-            studentId: sId,
-            parentId: pId
-          };
-
-          setStudentAcademicRecord(studentRecord);
-          setProfileData(sProfile);
-          setRole('student');
-          setIsLoggedIn(true);
-          setShowRoleSelection(false);
-          setAuthError(null);
-          setActiveTab('dashboard');
-          localStorage.setItem('eduplan_local_user', JSON.stringify({ ...sProfile, isLocalDemo: true }));
-          return;
-        }
-
-        if (selectedRole === 'parent') {
-          let signedInUser = auth.currentUser;
-          const requestedParentId = payload.parentId?.trim().toUpperCase();
-
-          if (!requestedParentId) {
-            setAuthError('Enter the Parent Access ID supplied by your institution.');
-            setChildAcademicRecord(null);
-            return;
-          }
-          if (!signedInUser) {
-            const provider = new GoogleAuthProvider();
-            const signInResult = await signInWithPopup(auth, provider);
-            signedInUser = signInResult.user;
-          }
-
-          const parentProfileSnapshot = await getDoc(doc(db, 'users', signedInUser.uid));
-          if (!parentProfileSnapshot.exists()) {
-            setAuthError('This parent account has not been linked by the institution yet. Please contact the school administrator.');
-            setChildAcademicRecord(null);
-            return;
-          }
-
-          const trustedProfile = parentProfileSnapshot.data() as ProfileData;
-          const trustedParentId = trustedProfile.parentId?.trim().toUpperCase();
-          const trustedStudentId = trustedProfile.childStudentId?.trim().toUpperCase();
-          if (
-            trustedProfile.role !== 'parent' ||
-            trustedParentId !== requestedParentId ||
-            !trustedStudentId
-          ) {
-            setAuthError('This Google account is not verified for that Parent Access ID. Contact the school administrator if the link is incorrect.');
-            setChildAcademicRecord(null);
-            return;
-          }
-
-          const linkedSnapshot = await getDocs(query(
-            collection(db, 'students'),
-            where('parentId', '==', trustedParentId),
-            where('studentId', '==', trustedStudentId)
-          ));
-          if (linkedSnapshot.size !== 1) {
-            setAuthError(linkedSnapshot.size > 1
-              ? 'The linked student record is duplicated. The school administrator must resolve it.'
-              : 'No matching student record is linked to this parent account.');
-            setChildAcademicRecord(null);
-            return;
-          }
-
-          const linkedData = linkedSnapshot.docs[0].data();
-          const linkedStudent = { id: linkedSnapshot.docs[0].id, ...linkedData, cgpa: linkedData.cgpa ?? linkedData.sem4 ?? '' } as Student;
-          const verifiedProfile: ProfileData = {
-            ...trustedProfile,
-            uid: signedInUser.uid,
-            parentId: trustedParentId,
-            childStudentId: trustedStudentId,
-            childName: linkedStudent.name
-          };
-          setChildAcademicRecord(linkedStudent);
-          setProfileData(verifiedProfile);
-          setRole('parent');
-          setIsLoggedIn(true);
-          setShowRoleSelection(false);
-          setAuthError(null);
-          setActiveTab('performance');
-          return;
-        }
-
-      }
-
-      // 2. Google Sign-In Fallback if no payload passed
-      let loggedInUser = auth.currentUser;
-      if (!loggedInUser) {
-        try {
-          const provider = new GoogleAuthProvider();
-          const result = await signInWithPopup(auth, provider);
-          loggedInUser = result.user;
-        } catch (err: any) {
-          if (err.code === 'auth/unauthorized-domain' || err.code === 'auth/popup-blocked' || err.code === 'auth/operation-not-allowed') {
-            return handleLogin(selectedRole, {
-              role: selectedRole,
-              name: selectedRole === 'teacher' ? 'Prof. Amit Jadhav' : (selectedRole === 'student' ? 'Aarav Sharma' : 'Rajesh Sharma'),
-              classCode: DEFAULT_TEACHER_CLASS_CODE
-            });
-          }
-          throw err;
-        }
-      }
-
-      const userDoc = await getDoc(doc(db, 'users', loggedInUser.uid));
-      if (!userDoc.exists()) {
-        const initialStudentId = undefined;
-        const initialProfile: ProfileData = {
-          uid: loggedInUser.uid,
-          name: loggedInUser.displayName || 'New User',
-          email: loggedInUser.email || '',
-          role: selectedRole,
-          avatar: loggedInUser.photoURL || '',
-          about: `I am a ${selectedRole} at EduNexus.`,
-          college: 'Institute of Engineering & Technology',
-          course: 'B.E. Information Technology',
-          semester: 'Semester IV',
-          classCode: selectedRole === 'teacher' ? DEFAULT_TEACHER_CLASS_CODE : undefined,
-          studentId: undefined,
-          parentId: undefined
-        };
-        const profileToSave = Object.fromEntries(
-          Object.entries({ ...initialProfile, updatedAt: serverTimestamp() })
-            .filter(([, value]) => value !== undefined)
-        );
-        await setDoc(doc(db, 'users', loggedInUser.uid), profileToSave);
-        setProfileData(initialProfile);
-        setRole(selectedRole);
+      if (!payload) throw new Error('Choose a portal and enter its required enrollment details before signing in.');
+      const cleanName = payload.name?.trim();
+      const signedInUser = auth.currentUser || (await signInWithPopup(auth, new GoogleAuthProvider())).user;
+      const functions = getFunctions(auth.app, 'us-central1');
+      let result: any;
+      if (selectedRole === 'teacher') {
+        const teacherInviteCode = payload.classCode?.trim();
+        if (!teacherInviteCode) throw new Error('Enter the institution-issued teacher invitation code.');
+        result = await httpsCallable(functions, 'createTeacherClass')({ displayName: cleanName || signedInUser.displayName || 'Teacher', teacherInviteCode });
+      } else if (selectedRole === 'student') {
+        const rollNo = payload.rollNo?.trim().toUpperCase();
+        const classCode = payload.classCode?.trim().toUpperCase();
+        if (!rollNo || !classCode) throw new Error('Both your registered roll number and class code are required.');
+        result = await httpsCallable(functions, 'claimStudentEnrollment')({ rollNo, classCode });
       } else {
-        const userData = userDoc.data() as ProfileData;
-        const isPrivileged = isPrivilegedTeamMember(loggedInUser.email) || isPrivilegedTeamMember(userData.email);
-        if (isPrivileged) {
-          const updatedProfile: ProfileData = {
-            ...userData,
-            role: selectedRole,
-            isPrivileged: true,
-            about: userData.about || `I am a ${selectedRole} at EduNexus.`,
-            updatedAt: serverTimestamp()
-          };
-          try {
-            await setDoc(doc(db, 'users', loggedInUser.uid), updatedProfile, { merge: true });
-          } catch (e) {}
-          setProfileData(updatedProfile);
-          setRole(selectedRole);
-        } else {
-          setProfileData(userData);
-          setRole(userData.role);
-        }
+        const parentCode = payload.parentId?.trim().toUpperCase();
+        if (!parentCode) throw new Error('Enter the parent access code supplied by the teacher.');
+        result = await httpsCallable(functions, 'claimParentAccess')({ parentCode });
       }
-
+      const data = result.data as { classCode?: string; studentDocId?: string };
+      const profileSnap = await getDoc(doc(db, 'users', signedInUser.uid));
+      if (!profileSnap.exists()) throw new Error('Enrollment was verified, but the user profile was not created. Contact the administrator.');
+      const trustedProfile = profileSnap.data() as ProfileData;
+      if (trustedProfile.role !== selectedRole) throw new Error('This Google account is registered for a different portal.');
+      if (selectedRole === 'student' || selectedRole === 'parent') {
+        const studentDocId = data.studentDocId || (selectedRole === 'student' ? (trustedProfile as any).studentDocId : (trustedProfile as any).childStudentDocId);
+        if (!studentDocId) throw new Error('No trusted student enrollment is linked to this account.');
+        const studentSnap = await getDoc(doc(db, 'students', studentDocId));
+        if (!studentSnap.exists()) throw new Error('The linked student record could not be found. Contact your teacher.');
+        const record = { id: studentSnap.id, ...studentSnap.data(), cgpa: studentSnap.data().cgpa ?? studentSnap.data().sem4 ?? '' } as Student;
+        if (selectedRole === 'student') setStudentAcademicRecord(record); else setChildAcademicRecord(record);
+      }
+      setProfileData(trustedProfile);
+      setRole(selectedRole);
       setIsLoggedIn(true);
       setShowRoleSelection(false);
       setAuthError(null);
-      const effectiveRole = isPrivilegedTeamMember(loggedInUser.email) ? selectedRole : (role || selectedRole);
-      if (effectiveRole === 'teacher') setActiveTab('my-class');
-      else if (effectiveRole === 'parent') setActiveTab('performance');
-      else setActiveTab('dashboard');
+      setActiveTab(selectedRole === 'teacher' ? 'my-class' : selectedRole === 'parent' ? 'performance' : 'dashboard');
     } catch (error: any) {
-      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
-        return;
-      }
-      console.error("Login Error:", error);
-      let message = "Unable to sign in.";
-      if (error.code === 'auth/unauthorized-domain') {
-        message = "Firebase domain unauthorized: Ensure your browser is accessing http://localhost:3000 (not 127.0.0.1) or the authorized deployment URL.";
-      } else if (error.code === 'auth/popup-blocked') {
-        message = "Google Sign-In popup was blocked by your browser. Please allow popups for this domain to sign in.";
-      } else if (error.message) {
-        message = error.message;
-      }
-      setAuthError(message);
+      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') return;
+      console.error('Secure portal sign-in failed:', error);
+      const code = String(error.code || '');
+      if (code === 'auth/unauthorized-domain') setAuthError('This website domain is not authorized for Google sign-in in Firebase Authentication.');
+      else if (code === 'functions/unavailable' || code === 'functions/internal') setAuthError('The enrollment service is unavailable. Confirm Firebase Cloud Functions are deployed to us-central1.');
+      else if (code === 'auth/popup-blocked') setAuthError('Google sign-in popup was blocked. Allow popups and try again.');
+      else setAuthError(error.message || 'Unable to verify this portal enrollment.');
     }
   };
 
@@ -1010,30 +759,10 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      setAuthError(null);
-      // onAuthStateChanged in useEffect will handle the rest
-    } catch (error: any) {
-      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
-        return; // User cancelled, ignore
-      }
-      console.error("Sign In Error:", error);
-
-      // Never silently create a demo session when real Google authentication fails.
-      // Doing so makes failed authentication look successful and can expose the wrong
-      // demo profile. Show the actionable Firebase error instead.
-      const authMessages: Record<string, string> = {
-        'auth/unauthorized-domain': 'This site is not authorised for Firebase sign-in. Add the exact local hostname in Firebase Authentication settings.',
-        'auth/popup-blocked': 'Your browser blocked the Google sign-in popup. Allow popups for this site and try again.',
-        'auth/operation-not-allowed': 'Google sign-in is disabled for this Firebase project. Enable the Google provider in Firebase Authentication.',
-        'auth/popup-closed-by-user': 'Google sign-in was cancelled.'
-      };
-      setAuthError(authMessages[error.code] || error.message || 'Unable to sign in with Google. Please try again.');
-    }
+  const handleGoogleSignIn = async (selectedRole: UserRole, payload: PortalLoginPayload) => {
+    await handleLogin(selectedRole, payload);
   };
+
 
   if (isLoading) {
     return (
@@ -1090,8 +819,8 @@ const AppContent: React.FC = () => {
         );
         case 'curriculum': return <Curriculum searchQuery={searchQuery} />;
         case 'scheduler': return <SmartScheduler searchQuery={searchQuery} />;
-        case 'notices': return <NoticeBoard notices={notices} setNotices={setNotices} isReadOnly={true} searchQuery={searchQuery} />;
-        case 'doubts': return <DoubtSolver messages={messages} setMessages={setMessages} userRole="student" userName={profileData.name} searchQuery={searchQuery} />;
+        case 'notices': return <NoticeBoard notices={notices} setNotices={setNotices} isReadOnly={true} searchQuery={searchQuery} classCode={profileData.classCode || ''} />;
+        case 'doubts': return <DoubtSolver messages={messages} setMessages={setMessages} userRole="student" userName={profileData.name} classCode={profileData.classCode || ''} searchQuery={searchQuery} />;
         case 'notes': return <SmartNotes />;
         case 'about-devs': return <AboutDevelopers />;
         case 'settings': return <ProfileSettings profile={profileData} onUpdate={updateProfile} onResetAccount={handleResetAccount} onRoleSwitch={handleRoleSwitch} />;
@@ -1100,8 +829,8 @@ const AppContent: React.FC = () => {
     } else if (role === 'teacher') {
       switch (activeTab) {
         case 'my-class': return <TeacherDashboard teacherName={profileData.name} classCode={profileData.classCode || DEFAULT_TEACHER_CLASS_CODE} searchQuery={searchQuery} notices={notices} />;
-        case 'notices': return <NoticeBoard notices={notices} setNotices={setNotices} isReadOnly={false} searchQuery={searchQuery} authorName={profileData.name} />;
-        case 'doubts': return <DoubtSolver messages={messages} setMessages={setMessages} userRole="teacher" userName={profileData.name} searchQuery={searchQuery} />;
+        case 'notices': return <NoticeBoard notices={notices} setNotices={setNotices} isReadOnly={false} searchQuery={searchQuery} authorName={profileData.name} classCode={profileData.classCode || ''} />;
+        case 'doubts': return <DoubtSolver messages={messages} setMessages={setMessages} userRole="teacher" userName={profileData.name} classCode={profileData.classCode || ''} searchQuery={searchQuery} />;
         case 'settings': return <ProfileSettings profile={profileData} onUpdate={updateProfile} onResetAccount={handleResetAccount} onRoleSwitch={handleRoleSwitch} />;
         default: return <TeacherDashboard teacherName={profileData.name} classCode={profileData.classCode || DEFAULT_TEACHER_CLASS_CODE} searchQuery={searchQuery} />;
       }
