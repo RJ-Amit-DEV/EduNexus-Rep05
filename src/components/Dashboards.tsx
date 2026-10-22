@@ -735,7 +735,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       </div>
                     </td>
 
-                    {/* Parent Access ID Column */}
+                    {/* Parent ID Column */}
                     <td className="px-3 py-3 whitespace-nowrap">
                       <div className="inline-flex items-center gap-1.5 font-mono text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
                         <KeyRound size={12} className="shrink-0" />
@@ -748,7 +748,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                             setTimeout(() => setCopiedId(null), 2000);
                           }}
                           className="ml-1 text-emerald-500 hover:text-emerald-800 dark:hover:text-emerald-200 cursor-pointer p-0.5"
-                          title="Copy Parent Access ID (Share with Parent)"
+                          title="Copy Parent ID (Share with Parent)"
                         >
                           {copiedId === parentIdVal ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
                         </button>
