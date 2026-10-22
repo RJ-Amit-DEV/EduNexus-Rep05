@@ -23,7 +23,7 @@ export interface Notice {
   authorId: string;
   author?: string;
   targetAudience?: 'all' | 'students' | 'parents' | 'specific';
-  targetRollNo?: string;
+  targetRollNo?: string;\n  recipientUids?: string[];
 }
 
 export interface NoticeBoardProps {
@@ -52,7 +52,7 @@ export const NoticeBoard: React.FC<NoticeBoardProps> = ({ notices, isReadOnly = 
 
     setIsPosting(true);
     try {
-      const newNotice = {
+      const recipientUid = targetRollNo.trim();\n      if (targetAudience === 'specific' && !recipientUid) {\n        window.alert('Enter the recipient Firebase Auth UID for a specific notice.');\n        return;\n      }\n\n      const newNotice = {
         title,
         content,
         date: serverTimestamp(),
@@ -60,7 +60,7 @@ export const NoticeBoard: React.FC<NoticeBoardProps> = ({ notices, isReadOnly = 
         authorId: auth.currentUser?.uid || 'dev-teacher-id',
         author: authorName || auth.currentUser?.displayName || 'Faculty Member',
         targetAudience,
-        targetRollNo: targetAudience === 'specific' ? targetRollNo : null
+        targetRollNo: targetAudience === 'specific' ? targetRollNo : null,\n        recipientUids: targetAudience === 'specific' ? [recipientUid] : []
       };
 
       await addDoc(collection(db, 'notices'), newNotice);
@@ -133,7 +133,7 @@ export const NoticeBoard: React.FC<NoticeBoardProps> = ({ notices, isReadOnly = 
                       <option value="all">Everyone</option>
                       <option value="students">Students Only</option>
                       <option value="parents">All Parents</option>
-                      <option value="specific">Specific Parent (Roll No)</option>
+                      <option value="specific">Specific recipient (Firebase UID)</option>
                     </select>
                   </div>
 
@@ -143,12 +143,12 @@ export const NoticeBoard: React.FC<NoticeBoardProps> = ({ notices, isReadOnly = 
                       animate={{ opacity: 1, scale: 1 }}
                       className="space-y-3"
                     >
-                      <label className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Enter Roll Number</label>
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Enter recipient Firebase Auth UID</label>
                       <input 
                         type="text" 
                         value={targetRollNo}
                         onChange={(e) => setTargetRollNo(e.target.value)}
-                        placeholder="e.g., 42"
+                        placeholder="e.g., paste the recipient's Firebase UID"
                         className="w-full px-8 py-5 bg-slate-50 border-2 border-transparent focus:bg-white focus:border-indigo-100 rounded-none text-lg font-semibold text-slate-700 outline-none transition-all"
                       />
                     </motion.div>
@@ -236,7 +236,7 @@ export const NoticeBoard: React.FC<NoticeBoardProps> = ({ notices, isReadOnly = 
                                 {notice.targetAudience === 'specific' ? (
                                   <>
                                     <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
-                                    Specific: Roll {notice.targetRollNo}
+                                    Specific recipient
                                   </>
                                 ) : (
                                   notice.targetAudience === 'students' ? 'Students Only' : 
