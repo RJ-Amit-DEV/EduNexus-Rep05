@@ -390,9 +390,9 @@ const AppContent: React.FC = () => {
           ]
         : role === 'parent'
           ? [
-              query(noticeCollection, where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
+              query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
               query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'parents'), orderBy('date', 'desc'), limit(50)),
-              query(noticeCollection, where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
+              query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
             ]
           : [];
 
