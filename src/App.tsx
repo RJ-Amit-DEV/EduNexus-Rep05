@@ -79,6 +79,22 @@ const getDemoStudentRecord = (): Student | null => {
   } as Student;
 };
 
+const getSupervisorSampleStudentRecord = (): Student => ({
+  id: 'team-sample-student-4042',
+  rollNo: 'INFTT-1-042',
+  studentId: 'STU-4042',
+  parentId: 'PAR-4042',
+  name: 'Aarav Sharma',
+  cgpa: '9.24',
+  ia1: 19,
+  ia2: 18,
+  attendance: 92,
+  quizPass: 88,
+  batch: 'INFTT-1',
+  college: 'Institute of Engineering & Technology',
+  course: 'B.E. Information Technology'
+});
+
 const ModuleLoadingFallback: React.FC<{ label?: string }> = ({ label = 'Loading Module...' }) => (
   <div className="flex-1 min-h-[60vh] flex flex-col items-center justify-center p-8">
     <div className="relative">
@@ -229,7 +245,7 @@ const AppContent: React.FC = () => {
     // Team Access supervisor sessions are local-only. Keep their clearly paired
     // sample child visible; do not let the authenticated-parent lookup clear it.
     if (profileData.uid.startsWith('dev-') && profileData.isPrivileged) {
-      setChildAcademicRecord(getDemoStudentRecord());
+      setChildAcademicRecord(getSupervisorSampleStudentRecord());
       return;
     }
     if (profileData.uid.startsWith('demo-')) return;
@@ -880,8 +896,8 @@ const AppContent: React.FC = () => {
     setIsLoggedIn(true);
     setShowRoleSelection(false);
     setAuthError(null);
-    setChildAcademicRecord(selectedRole === 'parent' ? getDemoStudentRecord() : null);
-    setStudentAcademicRecord(selectedRole === 'student' ? getDemoStudentRecord() : null);
+    setChildAcademicRecord(selectedRole === 'parent' ? getSupervisorSampleStudentRecord() : null);
+    setStudentAcademicRecord(selectedRole === 'student' ? getSupervisorSampleStudentRecord() : null);
     localStorage.setItem('eduplan_local_user', JSON.stringify({ ...teamProfile, isLocalDemo: true, isPrivileged: true }));
 
     if (selectedRole === 'teacher') setActiveTab('my-class');
