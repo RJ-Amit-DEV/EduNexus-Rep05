@@ -9,15 +9,6 @@ service cloud.firestore {
     function teacherOf(classCode) {
       return profileExists() && me().role == 'teacher' && me().classCode == classCode;
     }
-    function superUser() {
-      return signedIn() && request.auth.token.email in [
-        "amitjadhav4306@gmail.com", "guptakunal4575@gmail.com",
-        "krishnagosavi880@gmail.com", "rushabhhirave@gmail.com"
-      ];
-    }
-    match /{document=**} {
-      allow read, write: if superUser();
-    }
     match /users/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow create, delete: if false;
@@ -45,6 +36,9 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /parentLinks/{linkHash} {
+      allow read, write: if false;
+    }
+    match /studentAccessCodes/{codeHash} {
       allow read, write: if false;
     }
     match /students/{studentDocId} {
