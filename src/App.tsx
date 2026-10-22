@@ -31,15 +31,11 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ProfileData, ConsistencyData, Student } from './types';
 import { DEFAULT_NOTICES, DEFAULT_MESSAGES, isPrivilegedTeamMember } from './constants';
 import { handleFirestoreError, OperationType } from './lib/firestore-errors';
-import { 
-  DEFAULT_TEACHER_CLASS_CODE, 
-  generateStudentId, 
-  generateParentId 
-} from './lib/id-generator';
 import { collection, onSnapshot, query, where, orderBy, limit, doc, getDoc, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { 
   onAuthStateChanged, 
   signInWithPopup, 
+  signInWithCustomToken,
   GoogleAuthProvider, 
   signOut,
   User
@@ -406,16 +402,17 @@ const AppContent: React.FC = () => {
             ]
           : [];
 
-    const noticeSnapshots = new Map<string, Notice>();
-    const unsubscribeNotices = audienceQueries.map((noticeQuery) =>
+    const noticeSnapshotsByQuery: Map<string, Notice>[] = audienceQueries.map(() => new Map<string, Notice>());
+    const unsubscribeNotices = audienceQueries.map((noticeQuery, queryIndex) =>
       onSnapshot(noticeQuery, (snapshot) => {
+        const currentQueryNotices = new Map<string, Notice>();
         snapshot.docs.forEach((noticeDoc) => {
-          noticeSnapshots.set(noticeDoc.id, {
-            ...noticeDoc.data(),
-            id: noticeDoc.id
-          } as Notice);
+          currentQueryNotices.set(noticeDoc.id, { ...noticeDoc.data(), id: noticeDoc.id } as Notice);
         });
-        const merged = Array.from(noticeSnapshots.values()).sort((left, right) => {
+        noticeSnapshotsByQuery[queryIndex] = currentQueryNotices;
+        const mergedById = new Map<string, Notice>();
+        noticeSnapshotsByQuery.forEach((queryNotices) => queryNotices.forEach((notice, id) => mergedById.set(id, notice)));
+        const merged = Array.from(mergedById.values()).sort((left, right) => {
           const leftDate = left.date?.toMillis?.() ?? 0;
           const rightDate = right.date?.toMillis?.() ?? 0;
           return rightDate - leftDate;
@@ -423,30 +420,35 @@ const AppContent: React.FC = () => {
         setNotices(merged);
       }, (error) => {
         console.warn('Firestore notice audience query failed:', error);
-        setNotices([]);
+        noticeSnapshotsByQuery[queryIndex].clear();
+        const mergedById = new Map<string, Notice>();
+        noticeSnapshotsByQuery.forEach((queryNotices) => queryNotices.forEach((notice, id) => mergedById.set(id, notice)));
+        setNotices(Array.from(mergedById.values()));
       })
     );
 
-    // Listen for messages
-    const messagesQuery = query(collection(db, 'messages'), where('classCode', '==', classCode), orderBy('createdAt', 'asc'), limit(100));
-    const unsubscribeMessages = onSnapshot(messagesQuery, (snapshot) => {
-      const seenMsgIds = new Set<string>();
-      const newMessages: Message[] = [];
-      snapshot.docs.forEach((doc, idx) => {
-        const data = doc.data();
-        const baseId = doc.id || (data && data.id) || `msg-${idx}`;
-        const uniqueId = seenMsgIds.has(baseId) ? `${baseId}-${idx}` : baseId;
-        seenMsgIds.add(uniqueId);
-        newMessages.push({
-          ...data,
-          id: uniqueId
-        } as Message);
+    // Parents do not have access to classroom discussion messages.
+    let unsubscribeMessages = () => {};
+    if (role === 'teacher' || role === 'student') {
+      const messagesQuery = query(collection(db, 'messages'), where('classCode', '==', classCode), orderBy('createdAt', 'asc'), limit(100));
+      unsubscribeMessages = onSnapshot(messagesQuery, (snapshot) => {
+        const seenMsgIds = new Set<string>();
+        const newMessages: Message[] = [];
+        snapshot.docs.forEach((messageDoc, idx) => {
+          const data = messageDoc.data();
+          const baseId = messageDoc.id || (data && data.id) || `msg-${idx}`;
+          const uniqueId = seenMsgIds.has(baseId) ? `${baseId}-${idx}` : baseId;
+          seenMsgIds.add(uniqueId);
+          newMessages.push({ ...data, id: uniqueId } as Message);
+        });
+        setMessages(newMessages);
+      }, (error) => {
+        console.warn('Firestore message sync failed:', error);
+        setMessages([]);
       });
-      setMessages(newMessages.length > 0 ? newMessages : DEFAULT_MESSAGES);
-    }, (error) => {
-      console.warn("Firestore Message Sync (using defaults):", error);
-      setMessages(DEFAULT_MESSAGES);
-    });
+    } else {
+      setMessages([]);
+    }
 
     return () => {
       unsubscribeNotices.forEach((unsubscribe) => unsubscribe());
@@ -525,30 +527,51 @@ const AppContent: React.FC = () => {
 
   const handleLogin = async (selectedRole: UserRole, payload?: PortalLoginPayload) => {
     try {
-      if (!payload) throw new Error('Choose a portal and enter its required enrollment details before signing in.');
+      if (!payload) throw new Error('Enter the access details required for this portal.');
+      setAuthError(null);
       const cleanName = payload.name?.trim();
-      const signedInUser = auth.currentUser || (await signInWithPopup(auth, new GoogleAuthProvider())).user;
       const functions = getFunctions(auth.app, 'us-central1');
+      let signedInUser: User;
       let result: any;
+
       if (selectedRole === 'teacher') {
-        const teacherInviteCode = payload.classCode?.trim();
-        if (!teacherInviteCode) throw new Error('Enter the institution-issued teacher invitation code.');
-        result = await httpsCallable(functions, 'createTeacherClass')({ displayName: cleanName || signedInUser.displayName || 'Teacher', teacherInviteCode });
-      } else if (selectedRole === 'student') {
-        const rollNo = payload.rollNo?.trim().toUpperCase();
-        const classCode = payload.classCode?.trim().toUpperCase();
-        if (!rollNo || !classCode) throw new Error('Both your registered roll number and class code are required.');
-        result = await httpsCallable(functions, 'claimStudentEnrollment')({ rollNo, classCode });
+        let current = auth.currentUser;
+        if (current) {
+          const existingProfile = await getDoc(doc(db, 'users', current.uid));
+          if (!existingProfile.exists() || existingProfile.data().role !== 'teacher') {
+            await signOut(auth);
+            current = null;
+          }
+        }
+        signedInUser = current || (await signInWithPopup(auth, new GoogleAuthProvider())).user;
+        const teacherInviteCode = payload.classCode?.trim().toUpperCase() || '';
+        result = await httpsCallable(functions, 'createTeacherClass')({
+          displayName: cleanName || signedInUser.displayName || 'Teacher',
+          teacherInviteCode
+        });
       } else {
-        const parentCode = payload.parentId?.trim().toUpperCase();
-        if (!parentCode) throw new Error('Enter the parent access code supplied by the teacher.');
-        result = await httpsCallable(functions, 'claimParentAccess')({ parentCode });
+        const accessCode = selectedRole === 'student'
+          ? payload.studentAccessCode?.trim().toUpperCase()
+          : payload.parentAccessCode?.trim().toUpperCase();
+        if (!accessCode) throw new Error(selectedRole === 'student'
+          ? 'Enter the unique student login code supplied by your teacher.'
+          : 'Enter the parent access code supplied by your teacher.');
+        result = await httpsCallable(functions, 'redeemPortalAccessCode')({
+          role: selectedRole,
+          accessCode,
+          displayName: cleanName || 'Parent / Guardian'
+        });
+        const customToken = (result.data as { customToken?: string }).customToken;
+        if (!customToken) throw new Error('The access service did not return a sign-in token. Please try again.');
+        signedInUser = (await signInWithCustomToken(auth, customToken)).user;
       }
+
       const data = result.data as { classCode?: string; studentDocId?: string };
       const profileSnap = await getDoc(doc(db, 'users', signedInUser.uid));
-      if (!profileSnap.exists()) throw new Error('Enrollment was verified, but the user profile was not created. Contact the administrator.');
+      if (!profileSnap.exists()) throw new Error('Access was verified, but the user profile was not created. Please contact the administrator.');
       const trustedProfile = profileSnap.data() as ProfileData;
-      if (trustedProfile.role !== selectedRole) throw new Error('This Google account is registered for a different portal.');
+      if (trustedProfile.role !== selectedRole) throw new Error('This access credential is registered for a different portal.');
+
       if (selectedRole === 'student' || selectedRole === 'parent') {
         const studentDocId = data.studentDocId || (selectedRole === 'student' ? (trustedProfile as any).studentDocId : (trustedProfile as any).childStudentDocId);
         if (!studentDocId) throw new Error('No trusted student enrollment is linked to this account.');
@@ -557,6 +580,7 @@ const AppContent: React.FC = () => {
         const record = { id: studentSnap.id, ...studentSnap.data(), cgpa: studentSnap.data().cgpa ?? studentSnap.data().sem4 ?? '' } as Student;
         if (selectedRole === 'student') setStudentAcademicRecord(record); else setChildAcademicRecord(record);
       }
+
       setProfileData(trustedProfile);
       setRole(selectedRole);
       setIsLoggedIn(true);
@@ -567,10 +591,10 @@ const AppContent: React.FC = () => {
       if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') return;
       console.error('Secure portal sign-in failed:', error);
       const code = String(error.code || '');
-      if (code === 'auth/unauthorized-domain') setAuthError('This website domain is not authorized for Google sign-in in Firebase Authentication.');
-      else if (code === 'functions/unavailable' || code === 'functions/internal') setAuthError('The enrollment service is unavailable. Confirm Firebase Cloud Functions are deployed to us-central1.');
+      if (code === 'auth/unauthorized-domain') setAuthError('This website domain is not authorized for teacher Google sign-in in Firebase Authentication.');
+      else if (code === 'functions/unavailable' || code === 'functions/internal') setAuthError('The access service is unavailable. Confirm Firebase Cloud Functions are deployed to us-central1.');
       else if (code === 'auth/popup-blocked') setAuthError('Google sign-in popup was blocked. Allow popups and try again.');
-      else setAuthError(error.message || 'Unable to verify this portal enrollment.');
+      else setAuthError(error.message || 'Unable to verify this portal access code.');
     }
   };
 
@@ -838,11 +862,11 @@ const AppContent: React.FC = () => {
       }
     } else if (role === 'teacher') {
       switch (activeTab) {
-        case 'my-class': return <TeacherDashboard teacherName={profileData.name} classCode={profileData.classCode || DEFAULT_TEACHER_CLASS_CODE} searchQuery={searchQuery} notices={notices} />;
+        case 'my-class': return <TeacherDashboard teacherName={profileData.name} classCode={profileData.classCode || ''} searchQuery={searchQuery} notices={notices} />;
         case 'notices': return <NoticeBoard notices={notices} setNotices={setNotices} isReadOnly={false} searchQuery={searchQuery} authorName={profileData.name} classCode={profileData.classCode || ''} />;
         case 'doubts': return <DoubtSolver messages={messages} setMessages={setMessages} userRole="teacher" userName={profileData.name} classCode={profileData.classCode || ''} searchQuery={searchQuery} />;
         case 'settings': return <ProfileSettings profile={profileData} onUpdate={updateProfile} onResetAccount={handleResetAccount} onRoleSwitch={handleRoleSwitch} />;
-        default: return <TeacherDashboard teacherName={profileData.name} classCode={profileData.classCode || DEFAULT_TEACHER_CLASS_CODE} searchQuery={searchQuery} />;
+        default: return <TeacherDashboard teacherName={profileData.name} classCode={profileData.classCode || ''} searchQuery={searchQuery} />;
       }
     } else if (role === 'parent') {
       switch (activeTab) {

@@ -135,7 +135,7 @@ interface TeacherDashboardProps {
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ 
   teacherName = 'Prof. Amit Jadhav', 
-  classCode = DEFAULT_TEACHER_CLASS_CODE,
+  classCode = '',
   searchQuery = '', 
   notices = [] 
 }) => {
@@ -167,7 +167,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     let unsubscribeStudents: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      if (!currentUser) { setStudents([]); return; }
+      if (unsubscribeStudents) {
+        unsubscribeStudents();
+        unsubscribeStudents = null;
+      }
+      if (!currentUser || !classCode) {
+        setStudents([]);
+        return;
+      }
 
       // Scope the teacher roster to the active teacher's class; do not seed fake records into production.
       const q = query(collection(db, 'students'), where('teacherUid', '==', currentUser.uid), where('classCode', '==', classCode));
@@ -199,7 +206,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       unsubscribeAuth();
       if (unsubscribeStudents) unsubscribeStudents();
     };
-  }, []);
+  }, [classCode]);
 
   const filteredStudents = students.filter(s => s.classCode === classCode).filter(s => 
     (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -238,8 +245,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         cgpa: newStudent.cgpa, ia1: newStudent.ia1, ia2: newStudent.ia2,
         attendance: newStudent.attendance, quizPass: newStudent.quizPass
       });
-      const created = response.data as { studentDocId: string; studentId: string; parentCode: string; classCode: string; rollNo: string };
-      window.alert('Student registered successfully.\nStudent ID: ' + created.studentId + '\nParent access code (shown once): ' + created.parentCode + '\nShare the parent code privately with the guardian. It cannot be recovered from the database.');
+      const created = response.data as { studentDocId: string; studentId: string; studentAccessCode: string; parentCode: string; classCode: string; rollNo: string };
+      window.alert('Student registered successfully.\nStudent ID: ' + created.studentId + '\nStudent login code (shown once): ' + created.studentAccessCode + '\nParent access code: ' + created.parentCode + '\nShare each code privately with its intended user. Codes are not stored in plaintext and cannot be recovered; reissue access if a code is lost.');
       setShowAddStudentModal(false);
       setNewStudent({ name: '', rollNo: '', cgpa: '', ia1: 0, ia2: 0, attendance: 0, quizPass: 0 });
     } catch (error: any) {
@@ -255,7 +262,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         await deleteDoc(doc(db, 'students', id));
       }
     } catch (err) {
-      console.warn("Could not delete from Firestore, deleting locally:", err);
+      console.error("Could not delete student from Firestore:", err);
+      window.alert('The student could not be removed from the database. No local changes were made. Please try again.');
+      return;
     }
     const updated = students.filter(s => s.id !== id);
     setStudents(updated);
@@ -267,8 +276,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const exportToExcel = () => {
     const worksheet = XLSX.utils.json_to_sheet(students);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "INFTT-1 Students");
-    XLSX.writeFile(workbook, "INFTT-1_Student_List.xlsx");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Class Roster");
+    XLSX.writeFile(workbook, `EduNexus_${classCode || 'class'}_Student_List.xlsx`);
   };
 
   const [noticeTitle, setNoticeTitle] = useState('');
@@ -543,15 +552,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   </div>
                 </div>
 
-                <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/50 rounded-xl text-xs space-y-1">
-                  <div className="flex items-center justify-between text-indigo-700 dark:text-indigo-300 font-semibold">
-                    <span>Generated Student ID:</span>
-                    <span className="font-mono font-bold">STU-{4000 + students.length + 1}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-300 font-semibold">
-                    <span>Generated Parent Access ID:</span>
-                    <span className="font-mono font-bold">PAR-{4000 + students.length + 1}</span>
-                  </div>
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/50 rounded-xl text-xs text-indigo-800 dark:text-indigo-300">
+                  Secure student and parent login codes are generated after registration and displayed once. Keep each code private and give it only to its intended user.
                 </div>
 
                 <div className="flex items-center justify-end gap-3 pt-3">
@@ -679,8 +681,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 const isEditing = editingId === student.id;
                 const isRemedial = student.ia1 < 8;
                 const isLowAttendance = student.attendance < 75;
-                const studentIdVal = student.studentId || `STU-${4000 + idx + 1}`;
-                const parentIdVal = student.parentId || `PAR-${4000 + idx + 1}`;
+                const studentIdVal = student.studentId || '—';
+                const parentIdVal = student.parentId || '—';
 
                 return (
                   <tr 
@@ -733,7 +735,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       </div>
                     </td>
 
-                    {/* Parent Access ID Column */}
+                    {/* Parent ID Column */}
                     <td className="px-3 py-3 whitespace-nowrap">
                       <div className="inline-flex items-center gap-1.5 font-mono text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
                         <KeyRound size={12} className="shrink-0" />
@@ -746,7 +748,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                             setTimeout(() => setCopiedId(null), 2000);
                           }}
                           className="ml-1 text-emerald-500 hover:text-emerald-800 dark:hover:text-emerald-200 cursor-pointer p-0.5"
-                          title="Copy Parent Access ID (Share with Parent)"
+                          title="Copy Parent ID (Share with Parent)"
                         >
                           {copiedId === parentIdVal ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
                         </button>

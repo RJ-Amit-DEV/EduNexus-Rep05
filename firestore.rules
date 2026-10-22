@@ -9,15 +9,6 @@ service cloud.firestore {
     function teacherOf(classCode) {
       return profileExists() && me().role == 'teacher' && me().classCode == classCode;
     }
-    function superUser() {
-      return signedIn() && request.auth.token.email in [
-        "amitjadhav4306@gmail.com", "guptakunal4575@gmail.com",
-        "krishnagosavi880@gmail.com", "rushabhhirave@gmail.com"
-      ];
-    }
-    match /{document=**} {
-      allow read, write: if superUser();
-    }
     match /users/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow create, delete: if false;
@@ -47,6 +38,9 @@ service cloud.firestore {
     match /parentLinks/{linkHash} {
       allow read, write: if false;
     }
+    match /studentAccessCodes/{codeHash} {
+      allow read, write: if false;
+    }
     match /students/{studentDocId} {
       allow get: if profileExists() && (
         (me().role == 'teacher' && resource.data.teacherUid == request.auth.uid) ||
@@ -68,7 +62,12 @@ service cloud.firestore {
         request.resource.data.rollNo == resource.data.rollNo &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'cgpa', 'ia1', 'ia2', 'attendance', 'quizPass', 'updatedAt'
-        ]);
+        ]) &&
+        (request.resource.data.cgpa is string || request.resource.data.cgpa is number) &&
+        request.resource.data.ia1 is number && request.resource.data.ia1 >= 0 && request.resource.data.ia1 <= 20 &&
+        request.resource.data.ia2 is number && request.resource.data.ia2 >= 0 && request.resource.data.ia2 <= 20 &&
+        request.resource.data.attendance is number && request.resource.data.attendance >= 0 && request.resource.data.attendance <= 100 &&
+        request.resource.data.quizPass is number && request.resource.data.quizPass >= 0 && request.resource.data.quizPass <= 100;
     }
     match /notices/{noticeId} {
       function validAudience(a) { return a in ['all', 'students', 'parents', 'specific']; }
