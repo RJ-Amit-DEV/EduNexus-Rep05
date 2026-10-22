@@ -84,6 +84,7 @@ const getSupervisorSampleStudentRecord = (): Student => ({
   rollNo: 'INFTT-1-042',
   studentId: 'STU-4042',
   parentId: 'PAR-4042',
+  classCode: DEFAULT_TEACHER_CLASS_CODE,
   name: 'Aarav Sharma',
   cgpa: '9.24',
   ia1: 19,
