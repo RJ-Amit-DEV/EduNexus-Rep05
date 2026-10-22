@@ -1,10 +1,7 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
 
     function isAuthenticated() {
       return request.auth != null;
@@ -15,27 +12,43 @@ service cloud.firestore {
     }
 
     function isSuperUser() {
-      return isAuthenticated() && 
-             (request.auth.token.email in [
-               "amitjadhav4306@gmail.com",
-               "guptakunal4575@gmail.com",
-               "krishnagosavi880@gmail.com",
-               "rushabhhirave@gmail.com"
-             ]);
+      return isAuthenticated() &&
+        request.auth.token.email in [
+          "amitjadhav4306@gmail.com",
+          "guptakunal4575@gmail.com",
+          "krishnagosavi880@gmail.com",
+          "rushabhhirave@gmail.com"
+        ];
     }
 
-    // GLOBAL SUPERUSER FULL ACCESS
+    function userProfile() {
+      return get(
+        /databases/$(database)/documents/users/$(request.auth.uid)
+      ).data;
+    }
+
+    function hasProfile() {
+      return isAuthenticated() &&
+        exists(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        );
+    }
+
+    function teacherOwnsClass(classCode) {
+      return hasProfile() &&
+        userProfile().role == 'teacher' &&
+        userProfile().classCode == classCode;
+    }
+
+    // Superuser access
     match /{document=**} {
       allow read, write: if isSuperUser();
     }
 
-    // User Profiles
+    // User profiles and private subcollections
     match /users/{userId} {
-      // Authenticated institutional users can view profiles (for directory, doubt solver, mentor lookup)
       allow read: if isAuthenticated();
-      
-      // Parent-child and role bindings are institution-managed identity fields.
-      // A user cannot create a parent account or edit their own role/link to another child.
+
       allow create: if isSuperUser() || (
         isOwner(userId) &&
         request.resource.data.get('role', null) == 'student' &&
@@ -44,92 +57,159 @@ service cloud.firestore {
         request.resource.data.get('childStudentId', null) == null &&
         request.resource.data.get('classCode', null) == null
       );
+
       allow update: if isSuperUser() || (
         isOwner(userId) &&
-        request.resource.data.get('role', null) == resource.data.get('role', null) &&
-        request.resource.data.get('parentId', null) == resource.data.get('parentId', null) &&
-        request.resource.data.get('childStudentId', null) == resource.data.get('childStudentId', null) &&
-        request.resource.data.get('studentId', null) == resource.data.get('studentId', null) &&
-        request.resource.data.get('classCode', null) == resource.data.get('classCode', null)
+        request.resource.data.get('role', null) ==
+          resource.data.get('role', null) &&
+        request.resource.data.get('parentId', null) ==
+          resource.data.get('parentId', null) &&
+        request.resource.data.get('childStudentId', null) ==
+          resource.data.get('childStudentId', null) &&
+        request.resource.data.get('studentId', null) ==
+          resource.data.get('studentId', null) &&
+        request.resource.data.get('classCode', null) ==
+          resource.data.get('classCode', null)
       );
+
       allow delete: if isSuperUser() || isOwner(userId);
 
-      // User Deadlines Subcollection
       match /deadlines/{deadlineId} {
-        allow read, write: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+        allow read, write: if isOwner(userId);
       }
 
-      // Quiz Results Subcollection
       match /quiz_results/{resultId} {
-        allow read, write: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+        allow read, write: if isOwner(userId);
       }
 
-      // AI Schedules Subcollection
       match /schedules/{scheduleId} {
-        allow read, write: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+        allow read, write: if isOwner(userId);
       }
 
-      // Smart Notes Subcollection
       match /notes/{noteId} {
-        allow read, write: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+        allow read, write: if isOwner(userId);
       }
 
-      // Scheduler Chat Messages Subcollection
       match /scheduler_messages/{messageId} {
-        allow read, write: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+        allow read, write: if isOwner(userId);
       }
 
-      // Any other user sub-tab collection
       match /{subTab}/{docId} {
-        allow read, write: if isAuthenticated() && (isOwner(userId) || isSuperUser());
+        allow read, write: if isOwner(userId);
       }
     }
 
-    function userProfile() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function teacherOwnsClass(classCode) {
-      return isAuthenticated() &&
-             userProfile().role == 'teacher' &&
-             userProfile().classCode == classCode;
-    }
-
-    // Student records are scoped to the linked parent, the student, or the student's teacher.
+    // Student academic records
     match /students/{studentDocId} {
-      allow read: if isSuperUser() || (
-        isAuthenticated() && (
-          (userProfile().role == 'teacher' && resource.data.classCode == userProfile().classCode) ||
-          (userProfile().role == 'parent' &&
-            userProfile().parentId != null &&
-            userProfile().childStudentId != null &&
-            resource.data.parentId == userProfile().parentId &&
-            resource.data.studentId == userProfile().childStudentId) ||
-          (userProfile().role == 'student' && resource.data.studentId == userProfile().studentId)
+      allow read: if hasProfile() && (
+        (
+          userProfile().role == 'teacher' &&
+          resource.data.classCode == userProfile().classCode
+        ) ||
+        (
+          userProfile().role == 'parent' &&
+          userProfile().parentId != null &&
+          userProfile().childStudentId != null &&
+          resource.data.parentId == userProfile().parentId &&
+          resource.data.studentId == userProfile().childStudentId
+        ) ||
+        (
+          userProfile().role == 'student' &&
+          resource.data.studentId == userProfile().studentId
         )
       );
 
-      allow create: if isSuperUser() ||
-        (teacherOwnsClass(request.resource.data.classCode));
+      allow create: if teacherOwnsClass(
+        request.resource.data.classCode
+      );
 
-      allow update: if isSuperUser() ||
-        (teacherOwnsClass(resource.data.classCode) &&
-         request.resource.data.classCode == resource.data.classCode);
+      allow update: if teacherOwnsClass(resource.data.classCode) &&
+        request.resource.data.classCode == resource.data.classCode;
 
-      allow delete: if isSuperUser() || teacherOwnsClass(resource.data.classCode);
+      allow delete: if teacherOwnsClass(resource.data.classCode);
     }
 
-    // Global Institutional Notice Board
+    // Audience-restricted institutional notices
     match /notices/{noticeId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      function validAudience(audience) {
+        return audience in [
+          'all', 'students', 'parents', 'specific'
+        ];
+      }
+
+      function canReadNotice() {
+        return hasProfile() && (
+          userProfile().role == 'teacher' ||
+          resource.data.targetAudience == 'all' ||
+          (
+            userProfile().role == 'student' &&
+            resource.data.targetAudience == 'students'
+          ) ||
+          (
+            userProfile().role == 'parent' &&
+            resource.data.targetAudience == 'parents'
+          ) ||
+          (
+            resource.data.targetAudience == 'specific' &&
+            resource.data.get('recipientUids', []) is list &&
+            request.auth.uid in resource.data.get('recipientUids', [])
+          )
+        );
+      }
+
+      allow read: if canReadNotice();
+
+      allow create: if hasProfile() &&
+        userProfile().role == 'teacher' &&
+        request.resource.data.authorId == request.auth.uid &&
+        request.resource.data.title is string &&
+        request.resource.data.content is string &&
+        request.resource.data.title.size() > 0 &&
+        request.resource.data.content.size() > 0 &&
+        validAudience(request.resource.data.targetAudience) &&
+        (
+          request.resource.data.targetAudience != 'specific' ||
+          (
+            request.resource.data.get('recipientUids', []) is list &&
+            request.resource.data.recipientUids.size() > 0
+          )
+        );
+
+      // Notices cannot be edited after publication.
+      allow update: if false;
+
+      allow delete: if isSuperUser() ||
+        (
+          isAuthenticated() &&
+          resource.data.authorId == request.auth.uid
+        );
     }
 
-    // Global Doubt Solver Discussions
+    // Shared discussion: authenticate author and validate content
     match /messages/{messageId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated();
+
+      allow create: if hasProfile() &&
+        userProfile().role in ['teacher', 'student'] &&
+        request.resource.data.authorId == request.auth.uid &&
+        request.resource.data.role == userProfile().role &&
+        request.resource.data.content is string &&
+        request.resource.data.content.size() > 0 &&
+        request.resource.data.content.size() <= 5000;
+
+      allow update: if false;
+
+      allow delete: if isSuperUser() ||
+        (
+          isAuthenticated() &&
+          (
+            resource.data.authorId == request.auth.uid ||
+            (
+              hasProfile() &&
+              userProfile().role == 'teacher'
+            )
+          )
+        );
     }
   }
 }
