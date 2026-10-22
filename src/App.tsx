@@ -225,6 +225,13 @@ const AppContent: React.FC = () => {
       setChildAcademicRecord(null);
       return;
     }
+
+    // Team Access supervisor sessions are local-only. Keep their clearly paired
+    // sample child visible; do not let the authenticated-parent lookup clear it.
+    if (profileData.uid.startsWith('dev-') && profileData.isPrivileged) {
+      setChildAcademicRecord(getDemoStudentRecord());
+      return;
+    }
     if (profileData.uid.startsWith('demo-')) return;
 
     const targetParentId = profileData.parentId?.trim().toUpperCase();
