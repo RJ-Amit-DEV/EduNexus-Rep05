@@ -58,11 +58,16 @@ export const createTeacherClass = onCall({ region: REGION, cors }, async (reques
 
   await db.runTransaction(async (tx) => {
     const [inviteSnap, userSnap] = await Promise.all([tx.get(inviteRef), tx.get(userRef)]);
-    if (!inviteSnap.exists || inviteSnap.data()?.active !== true) {
+    if (!inviteSnap.exists) {
       throw new HttpsError("permission-denied", "The teacher invitation code is invalid or already used. Ask your institution for a valid invitation.");
     }
-    if (inviteSnap.data()?.claimedByUid && inviteSnap.data()?.claimedByUid !== uid) {
+    const invite = inviteSnap.data()!;
+    if (invite.claimedByUid && invite.claimedByUid !== uid) {
       throw new HttpsError("already-exists", "This teacher invitation has already been used.");
+    }
+    if (!invite.active) {
+      if (invite.claimedByUid === uid && userSnap.exists && userSnap.data()?.role === "teacher" && userSnap.data()?.classCode) return;
+      throw new HttpsError("permission-denied", "The teacher invitation code is invalid or already used. Ask your institution for a valid invitation.");
     }
     if (userSnap.exists && userSnap.data()?.role && userSnap.data()?.role !== "teacher") {
       throw new HttpsError("permission-denied", "This Google account is already registered for a different portal.");
