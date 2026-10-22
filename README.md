@@ -115,13 +115,13 @@ EduNexus is organized into three specialized, role-based portals connected throu
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-username/edunexus.git
-cd edunexus
+git clone https://github.com/RJ-Amit-DEV/EduNexus-Rep05.git
+cd EduNexus-Rep05
 ```
 
 ### 2. Install Dependencies
 ```bash
-npm install
+npm ci
 ```
 
 ### 3. Configure Environment Variables
@@ -165,8 +165,11 @@ To test or deploy the production-ready build:
 # Compile TypeScript, bundle frontend with Vite, and compile backend server
 npm run build
 
-# Start the compiled production server
+# Start the Express production server (set NODE_ENV=production in .env)
 npm start
+
+# For Vercel, deploy the repository with the Vercel project root set to this directory;
+# Vercel serves the static Vite build and the serverless handlers in /api.
 ```
 
 ---
