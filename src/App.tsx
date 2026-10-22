@@ -837,7 +837,7 @@ const AppContent: React.FC = () => {
     } else if (role === 'parent') {
       switch (activeTab) {
         case 'performance': return <ParentDashboard childData={childAcademicRecord} searchQuery={searchQuery} parentName={profileData.name} parentId={profileData.parentId} studentId={profileData.childStudentId} onSwitchParentId={handleSwitchParentId} allowDemoLinking={profileData.uid.startsWith('demo-')} />;
-        case 'notices': return <NoticeBoard notices={notices} setNotices={setNotices} isReadOnly={true} searchQuery={searchQuery} />;
+        case 'notices': return <NoticeBoard notices={notices} setNotices={setNotices} isReadOnly={true} searchQuery={searchQuery} classCode={profileData.classCode || ''} />;
         case 'college-info':
         case 'blogs':
         case 'contact':
