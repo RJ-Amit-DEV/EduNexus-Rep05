@@ -9,7 +9,7 @@ service cloud.firestore {
   function ownsStudent(){return hasProfile() && p().role == 'teacher' && resource.data.teacherUid == request.auth.uid && resource.data.classCode == p().classCode;}
   match /{document=**}{allow read,write:if admin();}
   match /users/{uid}{
-   allow read:if owner(uid);
+   allow read:if owner(uid) || (hasProfile() && p().role in ['teacher','student'] && resource.data.get('classCode',null) == p().classCode);
    allow create,delete:if false;
    allow update:if owner(uid) && request.resource.data.role == resource.data.role &&
     request.resource.data.get('classCode',null) == resource.data.get('classCode',null) &&

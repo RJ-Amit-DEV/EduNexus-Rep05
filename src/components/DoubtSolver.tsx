@@ -62,7 +62,7 @@ export const DoubtSolver: React.FC<DoubtSolverProps> = ({ messages, setMessages,
 
   useEffect(() => {
     // Fetch members from Firestore
-    const q = query(collection(db, 'users'));
+    const q = query(collection(db, 'users'), where('classCode', '==', classCode));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const seenUids = new Set<string>();
       const membersList: ProfileData[] = [];
@@ -125,6 +125,7 @@ export const DoubtSolver: React.FC<DoubtSolverProps> = ({ messages, setMessages,
       
       const msg = {
         sender: nameToUse,
+        classCode,
         role: roleToUse,
         content: newMessage || (simulatedRole === 'student' ? "Sir, can you explain the latest assignment?" : "Please check the notice board for updates."),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),

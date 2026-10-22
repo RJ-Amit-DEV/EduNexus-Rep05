@@ -418,17 +418,17 @@ const AppContent: React.FC = () => {
     // Firestore rules do not filter query results; each query must be authorized as a whole.
     const noticeCollection = collection(db, 'notices');
     const audienceQueries = role === 'teacher'
-      ? [query(noticeCollection, orderBy('date', 'desc'), limit(50))]
+      ? [query(noticeCollection, where('classCode', '==', profileData.classCode), orderBy('date', 'desc'), limit(50))]
       : role === 'student'
         ? [
-            query(noticeCollection, where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
-            query(noticeCollection, where('targetAudience', '==', 'students'), orderBy('date', 'desc'), limit(50)),
-            query(noticeCollection, where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
+            query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
+            query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'students'), orderBy('date', 'desc'), limit(50)),
+            query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
           ]
         : role === 'parent'
           ? [
               query(noticeCollection, where('targetAudience', '==', 'all'), orderBy('date', 'desc'), limit(50)),
-              query(noticeCollection, where('targetAudience', '==', 'parents'), orderBy('date', 'desc'), limit(50)),
+              query(noticeCollection, where('classCode', '==', profileData.classCode), where('targetAudience', '==', 'parents'), orderBy('date', 'desc'), limit(50)),
               query(noticeCollection, where('targetAudience', '==', 'specific'), where('recipientUids', 'array-contains', auth.currentUser.uid), orderBy('date', 'desc'), limit(50))
             ]
           : [];
@@ -455,7 +455,7 @@ const AppContent: React.FC = () => {
     );
 
     // Listen for messages
-    const messagesQuery = query(collection(db, 'messages'), orderBy('createdAt', 'asc'), limit(100));
+    const messagesQuery = query(collection(db, 'messages'), where('classCode', '==', profileData.classCode), orderBy('createdAt', 'asc'), limit(100));
     const unsubscribeMessages = onSnapshot(messagesQuery, (snapshot) => {
       const seenMsgIds = new Set<string>();
       const newMessages: Message[] = [];
@@ -479,7 +479,7 @@ const AppContent: React.FC = () => {
       unsubscribeNotices.forEach((unsubscribe) => unsubscribe());
       unsubscribeMessages();
     };
-  }, [isLoggedIn, role, profileData.rollNo, childAcademicRecord?.rollNo]);
+  }, [isLoggedIn, role, profileData.classCode, profileData.rollNo, childAcademicRecord?.rollNo]);
 
   // Handle unread counts logic
   useEffect(() => {
@@ -726,78 +726,6 @@ const AppContent: React.FC = () => {
 
       }
 
-      // 2. Google Sign-In Fallback if no payload passed
-      let loggedInUser = auth.currentUser;
-      if (!loggedInUser) {
-        try {
-          const provider = new GoogleAuthProvider();
-          const result = await signInWithPopup(auth, provider);
-          loggedInUser = result.user;
-        } catch (err: any) {
-          if (err.code === 'auth/unauthorized-domain' || err.code === 'auth/popup-blocked' || err.code === 'auth/operation-not-allowed') {
-            return handleLogin(selectedRole, {
-              role: selectedRole,
-              name: selectedRole === 'teacher' ? 'Prof. Amit Jadhav' : (selectedRole === 'student' ? 'Aarav Sharma' : 'Rajesh Sharma'),
-              classCode: DEFAULT_TEACHER_CLASS_CODE
-            });
-          }
-          throw err;
-        }
-      }
-
-      const userDoc = await getDoc(doc(db, 'users', loggedInUser.uid));
-      if (!userDoc.exists()) {
-        const initialStudentId = undefined;
-        const initialProfile: ProfileData = {
-          uid: loggedInUser.uid,
-          name: loggedInUser.displayName || 'New User',
-          email: loggedInUser.email || '',
-          role: selectedRole,
-          avatar: loggedInUser.photoURL || '',
-          about: `I am a ${selectedRole} at EduNexus.`,
-          college: 'Institute of Engineering & Technology',
-          course: 'B.E. Information Technology',
-          semester: 'Semester IV',
-          classCode: selectedRole === 'teacher' ? DEFAULT_TEACHER_CLASS_CODE : undefined,
-          studentId: undefined,
-          parentId: undefined
-        };
-        const profileToSave = Object.fromEntries(
-          Object.entries({ ...initialProfile, updatedAt: serverTimestamp() })
-            .filter(([, value]) => value !== undefined)
-        );
-        await setDoc(doc(db, 'users', loggedInUser.uid), profileToSave);
-        setProfileData(initialProfile);
-        setRole(selectedRole);
-      } else {
-        const userData = userDoc.data() as ProfileData;
-        const isPrivileged = isPrivilegedTeamMember(loggedInUser.email) || isPrivilegedTeamMember(userData.email);
-        if (isPrivileged) {
-          const updatedProfile: ProfileData = {
-            ...userData,
-            role: selectedRole,
-            isPrivileged: true,
-            about: userData.about || `I am a ${selectedRole} at EduNexus.`,
-            updatedAt: serverTimestamp()
-          };
-          try {
-            await setDoc(doc(db, 'users', loggedInUser.uid), updatedProfile, { merge: true });
-          } catch (e) {}
-          setProfileData(updatedProfile);
-          setRole(selectedRole);
-        } else {
-          setProfileData(userData);
-          setRole(userData.role);
-        }
-      }
-
-      setIsLoggedIn(true);
-      setShowRoleSelection(false);
-      setAuthError(null);
-      const effectiveRole = isPrivilegedTeamMember(loggedInUser.email) ? selectedRole : (role || selectedRole);
-      if (effectiveRole === 'teacher') setActiveTab('my-class');
-      else if (effectiveRole === 'parent') setActiveTab('performance');
-      else setActiveTab('dashboard');
     } catch (error: any) {
       if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
         return;
@@ -1091,7 +1019,7 @@ const AppContent: React.FC = () => {
         case 'curriculum': return <Curriculum searchQuery={searchQuery} />;
         case 'scheduler': return <SmartScheduler searchQuery={searchQuery} />;
         case 'notices': return <NoticeBoard notices={notices} setNotices={setNotices} isReadOnly={true} searchQuery={searchQuery} />;
-        case 'doubts': return <DoubtSolver messages={messages} setMessages={setMessages} userRole="student" userName={profileData.name} searchQuery={searchQuery} />;
+        case 'doubts': return <DoubtSolver messages={messages} setMessages={setMessages} userRole="student" userName={profileData.name} classCode={profileData.classCode || ""} searchQuery={searchQuery} />;
         case 'notes': return <SmartNotes />;
         case 'about-devs': return <AboutDevelopers />;
         case 'settings': return <ProfileSettings profile={profileData} onUpdate={updateProfile} onResetAccount={handleResetAccount} onRoleSwitch={handleRoleSwitch} />;
