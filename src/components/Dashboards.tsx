@@ -167,7 +167,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     let unsubscribeStudents: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      if (!currentUser) { setStudents([]); return; }
+      if (unsubscribeStudents) {
+        unsubscribeStudents();
+        unsubscribeStudents = null;
+      }
+      if (!currentUser || !classCode) {
+        setStudents([]);
+        return;
+      }
 
       // Scope the teacher roster to the active teacher's class; do not seed fake records into production.
       const q = query(collection(db, 'students'), where('teacherUid', '==', currentUser.uid), where('classCode', '==', classCode));
@@ -255,7 +262,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         await deleteDoc(doc(db, 'students', id));
       }
     } catch (err) {
-      console.warn("Could not delete from Firestore, deleting locally:", err);
+      console.error("Could not delete student from Firestore:", err);
+      window.alert('The student could not be removed from the database. No local changes were made. Please try again.');
+      return;
     }
     const updated = students.filter(s => s.id !== id);
     setStudents(updated);
@@ -267,8 +276,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const exportToExcel = () => {
     const worksheet = XLSX.utils.json_to_sheet(students);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "INFTT-1 Students");
-    XLSX.writeFile(workbook, "INFTT-1_Student_List.xlsx");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Class Roster");
+    XLSX.writeFile(workbook, `EduNexus_${classCode || 'class'}_Student_List.xlsx`);
   };
 
   const [noticeTitle, setNoticeTitle] = useState('');
@@ -543,15 +552,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   </div>
                 </div>
 
-                <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/50 rounded-xl text-xs space-y-1">
-                  <div className="flex items-center justify-between text-indigo-700 dark:text-indigo-300 font-semibold">
-                    <span>Generated Student ID:</span>
-                    <span className="font-mono font-bold">STU-{4000 + students.length + 1}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-300 font-semibold">
-                    <span>Generated Parent Access ID:</span>
-                    <span className="font-mono font-bold">PAR-{4000 + students.length + 1}</span>
-                  </div>
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/50 rounded-xl text-xs text-indigo-800 dark:text-indigo-300">
+                  Secure student and parent login codes are generated after registration and displayed once. Keep each code private and give it only to its intended user.
                 </div>
 
                 <div className="flex items-center justify-end gap-3 pt-3">
@@ -679,8 +681,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 const isEditing = editingId === student.id;
                 const isRemedial = student.ia1 < 8;
                 const isLowAttendance = student.attendance < 75;
-                const studentIdVal = student.studentId || `STU-${4000 + idx + 1}`;
-                const parentIdVal = student.parentId || `PAR-${4000 + idx + 1}`;
+                const studentIdVal = student.studentId || '—';
+                const parentIdVal = student.parentId || '—';
 
                 return (
                   <tr 
