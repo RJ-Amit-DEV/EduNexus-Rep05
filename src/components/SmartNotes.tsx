@@ -55,6 +55,7 @@ export const SmartNotes: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncAvailable, setIsSyncAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const initialSelectionDone = useRef(false);
@@ -62,6 +63,7 @@ export const SmartNotes: React.FC = () => {
 
   useEffect(() => {
     initialSelectionDone.current = false;
+    setIsSyncAvailable(false);
     setIsLoading(true);
     setError(null);
 
@@ -69,6 +71,7 @@ export const SmartNotes: React.FC = () => {
       const localNotes = readLocalNotes().sort((a, b) => dateValue(b.updatedAt) - dateValue(a.updatedAt));
       setNotes(localNotes);
       setIsLoading(false);
+      setIsSyncAvailable(false);
       return;
     }
 
@@ -81,6 +84,7 @@ export const SmartNotes: React.FC = () => {
       } as StudyNote));
       setNotes(fetched);
       setIsLoading(false);
+      setIsSyncAvailable(true);
       setError(null);
       if (!initialSelectionDone.current) {
         initialSelectionDone.current = true;
@@ -95,6 +99,7 @@ export const SmartNotes: React.FC = () => {
     }, err => {
       console.error('Smart Notes sync failed:', err);
       setIsLoading(false);
+      setIsSyncAvailable(false);
       setError('Could not sync your notes with Firestore. Check your connection and permissions; local demo notes remain available.');
       const localNotes = readLocalNotes().sort((a, b) => dateValue(b.updatedAt) - dateValue(a.updatedAt));
       setNotes(localNotes);
@@ -151,7 +156,7 @@ export const SmartNotes: React.FC = () => {
     };
 
     try {
-      if (user) {
+      if (user && isSyncAvailable) {
         const notesPath = `users/${user.uid}/notes`;
         if (isCreating || !activeId || activeId.startsWith('local-')) {
           const created = await addDoc(collection(db, notesPath), payload);
@@ -184,7 +189,7 @@ export const SmartNotes: React.FC = () => {
     setError(null);
     setNotice(null);
     try {
-      if (user && !note.id.startsWith('local-')) {
+      if (user && isSyncAvailable && !note.id.startsWith('local-')) {
         await deleteDoc(doc(db, `users/${user.uid}/notes`, note.id));
       } else {
         const next = readLocalNotes().filter(item => item.id !== note.id);
@@ -265,8 +270,8 @@ export const SmartNotes: React.FC = () => {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">
-            {user ? <Cloud size={14} /> : <HardDrive size={14} />}
-            {user ? 'Synced to account' : 'Browser-only mode'}
+            {user && isSyncAvailable ? <Cloud size={14} /> : <HardDrive size={14} />}
+            {user && isSyncAvailable ? 'Synced to account' : 'Browser-only mode'}
           </span>
           <button onClick={resetEditor} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-500">
             <FilePlus2 size={16} /> New note
