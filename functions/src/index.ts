@@ -11,7 +11,7 @@ function requireAuth(request: { auth?: { uid: string; token: Record<string, unkn
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Sign in before continuing.");
   return request.auth;
 }
-export const createTeacherClass = onCall(async (request) => {
+export const createTeacherClass = onCall({ cors: ["https://edu-nexus-rep05.vercel.app"] }, async (request) => {
   const auth = requireAuth(request), uid = auth.uid;
   const inviteCode = normalize(request.data?.teacherInviteCode);
   if (!inviteCode) throw new HttpsError("permission-denied", "An institution-issued teacher invitation code is required.");
@@ -36,7 +36,7 @@ export const createTeacherClass = onCall(async (request) => {
   await batch.commit();
   return { classCode };
 });
-export const addStudentToClass = onCall(async (request) => {
+export const addStudentToClass = onCall({ cors: ["https://edu-nexus-rep05.vercel.app"] }, async (request) => {
   const auth = requireAuth(request);
   const classCode = normalize(request.data?.classCode), name = String(request.data?.name ?? "").trim().slice(0, 120), rollNo = normalize(request.data?.rollNo);
   if (!classCode || !name || !rollNo) throw new HttpsError("invalid-argument", "Class code, student name, and roll number are required.");
@@ -65,7 +65,7 @@ export const addStudentToClass = onCall(async (request) => {
   });
   return { studentDocId: studentRef.id, studentId, parentCode, classCode, rollNo };
 });
-export const claimStudentEnrollment = onCall(async (request) => {
+export const claimStudentEnrollment = onCall({ cors: ["https://edu-nexus-rep05.vercel.app"] }, async (request) => {
   const auth = requireAuth(request), classCode = normalize(request.data?.classCode), rollNo = normalize(request.data?.rollNo);
   if (!classCode || !rollNo) throw new HttpsError("invalid-argument", "Roll number and class code are required.");
   const found = await db.collection("students").where("classCode", "==", classCode).where("rollNo", "==", rollNo).limit(2).get();
@@ -82,7 +82,7 @@ export const claimStudentEnrollment = onCall(async (request) => {
   });
   return { studentDocId: studentRef.id, studentId: found.docs[0].data().studentId, classCode, rollNo };
 });
-export const claimParentAccess = onCall(async (request) => {
+export const claimParentAccess = onCall({ cors: ["https://edu-nexus-rep05.vercel.app"] }, async (request) => {
   const auth = requireAuth(request), parentCode = normalize(request.data?.parentCode);
   if (!parentCode) throw new HttpsError("invalid-argument", "Parent access code is required.");
   const hash = codeHash(parentCode), linkRef = db.doc(`parentLinks/${hash}`), linkSnap = await linkRef.get();
