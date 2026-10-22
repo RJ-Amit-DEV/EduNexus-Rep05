@@ -53,6 +53,8 @@ test('student can read only the linked student record', async () => {
 test('teacher can update academic fields only for their own students', async () => {
   const db = env.authenticatedContext('teacherA').firestore();
   await assertSucceeds(updateDoc(doc(db, 'students/studentA'), { cgpa: '9.5' }));
+  await assertFails(updateDoc(doc(db, 'students/studentA'), { ia1: 21 }));
+  await assertFails(updateDoc(doc(db, 'students/studentA'), { attendance: 140 }));
   await assertFails(updateDoc(doc(db, 'students/studentB'), { cgpa: '10.0' }));
   await assertFails(updateDoc(doc(db, 'students/studentA'), { parentUid: 'attacker' }));
 });
