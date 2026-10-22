@@ -54,7 +54,7 @@ export const createTeacherClass = onCall({ region: REGION, cors }, async (reques
     : "";
   const inviteRef = db.doc("teacherInvites/" + hash(rawInviteCode));
   const userRef = db.doc("users/" + uid);
-  const classCode = randomCode("CLS-", 5);
+  const classCode = randomCode("CLS-", 6);
   const classRef = db.doc("classes/" + classCode);
   const now = FieldValue.serverTimestamp();
 
@@ -82,7 +82,7 @@ export const createTeacherClass = onCall({ region: REGION, cors }, async (reques
     }
     if (userSnap.exists && userSnap.data()?.classCode) return;
     tx.update(inviteRef, { active: false, claimedByUid: uid, claimedAt: now });
-    tx.set(classRef, {
+    tx.create(classRef, {
       classCode, teacherUid: uid, teacherName: String(request.data?.displayName || request.auth?.token?.name || "Teacher").trim().slice(0, 120),
       createdAt: now, status: "active",
     });
