@@ -36,7 +36,7 @@ export interface NoticeBoardProps {
   classCode: string;
 }
 
-export const NoticeBoard: React.FC<NoticeBoardProps> = ({ notices, isReadOnly = false, searchQuery = '', authorName }) => {
+export const NoticeBoard: React.FC<NoticeBoardProps> = ({ notices, isReadOnly = false, searchQuery = '', authorName, classCode }) => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [targetAudience, setTargetAudience] = useState<'all' | 'students' | 'parents' | 'specific'>('all');
