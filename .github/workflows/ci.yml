@@ -20,7 +20,5 @@ jobs:
         run: npm ci
       - name: Type-check
         run: npm run lint
-      - name: Build Cloud Functions
-        run: npm --prefix functions install && npm --prefix functions run build
       - name: Build production bundle
         run: npm run build
