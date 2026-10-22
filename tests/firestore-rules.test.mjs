@@ -2,7 +2,7 @@ import { after, before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 
 let env;
 
@@ -49,6 +49,20 @@ test('student can read only the linked student record', async () => {
   await assertSucceeds(getDoc(doc(db, 'students/studentA')));
   await assertFails(getDoc(doc(db, 'students/studentB')));
 });
+
+test('teacher can update academic fields only for their own students', async () => {
+  const db = env.authenticatedContext('teacherA').firestore();
+  await assertSucceeds(updateDoc(doc(db, 'students/studentA'), { cgpa: '9.5' }));
+  await assertFails(updateDoc(doc(db, 'students/studentB'), { cgpa: '10.0' }));
+  await assertFails(updateDoc(doc(db, 'students/studentA'), { parentUid: 'attacker' }));
+});
+
+test('student cannot modify trusted academic records or role links', async () => {
+  const db = env.authenticatedContext('studentA').firestore();
+  await assertFails(updateDoc(doc(db, 'students/studentA'), { cgpa: '10.0' }));
+  await assertFails(updateDoc(doc(db, 'users/studentA'), { role: 'teacher', classCode: 'CLS-B' }));
+});
+
 
 test('parent can read only the linked child record', async () => {
   const db = env.authenticatedContext('parentA').firestore();
