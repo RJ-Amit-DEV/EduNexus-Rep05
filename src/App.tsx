@@ -855,23 +855,27 @@ const AppContent: React.FC = () => {
       rollNo: selectedRole === 'student' ? 'INFTT-1-001' : undefined
     };
 
-    try {
-      if (db) {
-        await setDoc(doc(db, 'users', uid), {
-          ...devProfile,
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-      }
-    } catch (e) {
-      console.warn("Could not sync to cloud directly, storing locally:", e);
-    }
+    // Team Access is a local demonstration session, not a Firebase identity.
+    // Never write synthetic "dev-..." users into production Firestore. Team-only
+    // sample records make the portal understandable without exposing demo data
+    // to ordinary accounts.
+    const teamProfile: ProfileData = {
+      ...devProfile,
+      classCode: selectedRole === 'teacher' ? DEFAULT_TEACHER_CLASS_CODE : undefined,
+      studentId: selectedRole === 'student' ? 'STU-4042' : undefined,
+      parentId: selectedRole === 'parent' ? 'PAR-4042' : undefined,
+      childStudentId: selectedRole === 'parent' ? 'STU-4042' : undefined,
+      childName: selectedRole === 'parent' ? 'Aarav Sharma' : undefined
+    };
 
-    setProfileData(devProfile);
+    setProfileData(teamProfile);
     setRole(selectedRole);
     setIsLoggedIn(true);
     setShowRoleSelection(false);
     setAuthError(null);
-    localStorage.setItem('eduplan_local_user', JSON.stringify({ ...devProfile, isPrivileged: true }));
+    setChildAcademicRecord(selectedRole === 'parent' ? getDemoStudentRecord() : null);
+    setStudentAcademicRecord(selectedRole === 'student' ? getDemoStudentRecord() : null);
+    localStorage.setItem('eduplan_local_user', JSON.stringify({ ...teamProfile, isLocalDemo: true, isPrivileged: true }));
 
     if (selectedRole === 'teacher') setActiveTab('my-class');
     else if (selectedRole === 'parent') setActiveTab('performance');
