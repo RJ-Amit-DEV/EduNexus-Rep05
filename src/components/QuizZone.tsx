@@ -11,7 +11,9 @@ import {
   Zap, 
   HelpCircle,
   BarChart2,
-  ChevronRight
+  ChevronRight,
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
@@ -217,6 +219,116 @@ export const QuizZone: React.FC = () => {
   const [streak, setStreak] = useState(0);
   const [userAnswers, setUserAnswers] = useState<{ [qIndex: number]: number }>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [aiTopic, setAiTopic] = useState('');
+  const [aiDifficulty, setAiDifficulty] = useState<'Beginner' | 'Intermediate' | 'Advanced'>('Intermediate');
+  const [aiQuestionCount, setAiQuestionCount] = useState('5');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+
+  const generateAIQuiz = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const topic = aiTopic.trim();
+    if (!topic) {
+      setGenerationError('Enter a subject or topic for your quiz.');
+      return;
+    }
+    if (topic.length > 160) {
+      setGenerationError('Keep the topic under 160 characters.');
+      return;
+    }
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setGenerationError('Please sign in before generating an AI quiz.');
+      return;
+    }
+
+    setIsGenerating(true);
+    setGenerationError(null);
+    try {
+      const token = await currentUser.getIdToken();
+      const questionCount = Math.min(10, Math.max(3, Number(aiQuestionCount) || 5));
+      const response = await fetch('/api/generate-content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [{
+              text: `Create ${questionCount} accurate multiple-choice questions about: ${topic}. Difficulty: ${aiDifficulty}. Return only JSON matching the requested schema. Each question must have exactly four distinct options, correctIndex must be an integer from 0 to 3, and explanation must briefly explain why the answer is correct. Avoid ambiguous questions.`
+            }]
+          }],
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'OBJECT',
+              properties: {
+                questions: {
+                  type: 'ARRAY',
+                  items: {
+                    type: 'OBJECT',
+                    properties: {
+                      question: { type: 'STRING' },
+                      options: { type: 'ARRAY', items: { type: 'STRING' } },
+                      correctIndex: { type: 'INTEGER' },
+                      explanation: { type: 'STRING' }
+                    },
+                    required: ['question', 'options', 'correctIndex', 'explanation']
+                  }
+                }
+              },
+              required: ['questions']
+            }
+          }
+        })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof result.error === 'string' ? result.error : 'AI quiz generation failed. Please try again.');
+      }
+      if (typeof result.text !== 'string') throw new Error('The AI service returned an invalid response.');
+      const parsed = JSON.parse(result.text);
+      if (!Array.isArray(parsed.questions)) throw new Error('The AI response did not contain a question list.');
+
+      const questions: Question[] = parsed.questions.slice(0, questionCount).map((item: unknown, index: number) => {
+        if (!item || typeof item !== 'object') throw new Error('The AI returned an invalid question. Please generate again.');
+        const question = item as { question?: unknown; options?: unknown; correctIndex?: unknown; explanation?: unknown };
+        if (typeof question.question !== 'string' || !question.question.trim() ||
+            !Array.isArray(question.options) || question.options.length !== 4 ||
+            !question.options.every((option: unknown) => typeof option === 'string' && option.trim()) ||
+            !Number.isInteger(question.correctIndex) || (question.correctIndex as number) < 0 || (question.correctIndex as number) > 3 ||
+            typeof question.explanation !== 'string' || !question.explanation.trim()) {
+          throw new Error('The AI returned a malformed question. Please generate again.');
+        }
+        return {
+          id: `ai-${Date.now()}-${index}`,
+          question: question.question.trim(),
+          options: question.options.map((option: string) => option.trim()),
+          correctIndex: question.correctIndex as number,
+          explanation: question.explanation.trim()
+        };
+      });
+      if (questions.length < 3) throw new Error('The AI generated too few valid questions. Please try again.');
+
+      const category: QuizCategory = {
+        id: `ai-${Date.now()}`,
+        title: topic,
+        code: 'AI-GEN',
+        description: `AI-generated practice quiz • ${aiDifficulty} • ${questions.length} questions`,
+        difficulty: aiDifficulty,
+        questions
+      };
+      setAiTopic('');
+      startQuiz(category);
+    } catch (error) {
+      console.error('AI quiz generation failed:', error);
+      setGenerationError(error instanceof Error ? error.message : 'Could not generate the quiz. Please try again.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const startQuiz = (category: QuizCategory) => {
     setSelectedCategory(category);
@@ -337,6 +449,39 @@ export const QuizZone: React.FC = () => {
               </div>
             </div>
           </div>
+
+          <form onSubmit={generateAIQuiz} className="rounded-2xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50/60 dark:bg-indigo-950/20 p-5 sm:p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-indigo-600 text-white p-2.5"><Sparkles size={20} /></div>
+              <div className="flex-1">
+                <h3 className="font-bold text-slate-900 dark:text-white">Generate a quiz with AI</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">Create a fresh practice quiz for any topic. Review explanations as you answer.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <label className="sm:col-span-2 lg:col-span-2 text-xs font-bold text-slate-600 dark:text-slate-300 space-y-1.5">
+                Subject or topic
+                <input value={aiTopic} onChange={e => setAiTopic(e.target.value)} maxLength={160} placeholder="e.g. Binary trees, DBMS normalization" className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm font-medium outline-none focus:border-indigo-500" />
+              </label>
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-300 space-y-1.5">
+                Difficulty
+                <select value={aiDifficulty} onChange={e => setAiDifficulty(e.target.value as typeof aiDifficulty)} className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm font-medium">
+                  <option>Beginner</option><option>Intermediate</option><option>Advanced</option>
+                </select>
+              </label>
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-300 space-y-1.5">
+                Questions
+                <select value={aiQuestionCount} onChange={e => setAiQuestionCount(e.target.value)} className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm font-medium">
+                  <option value="3">3 questions</option><option value="5">5 questions</option><option value="10">10 questions</option>
+                </select>
+              </label>
+            </div>
+            {generationError && <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">{generationError}</p>}
+            <button type="submit" disabled={isGenerating || !aiTopic.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60">
+              {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+              {isGenerating ? 'Generating quiz…' : 'Generate AI Quiz'}
+            </button>
+          </form>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {QUIZ_DATA.map((cat) => (
