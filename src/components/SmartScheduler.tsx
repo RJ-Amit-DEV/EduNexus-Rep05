@@ -106,6 +106,7 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
   const [messages, setMessages] = useState<Message[]>([]);
   const [schedulesHistory, setSchedulesHistory] = useState<ScheduleHistoryItem[]>([]);
   const [historySaveError, setHistorySaveError] = useState<string | null>(null);
+  const [schedulerError, setSchedulerError] = useState<string | null>(null);
   const [activeScheduleId, setActiveScheduleId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [input, setInput] = useState('');
@@ -568,14 +569,24 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
   };
 
   const saveMessage = async (msg: Message) => {
-    if (auth.currentUser) {
-      const path = `users/${auth.currentUser.uid}/scheduler_messages`;
-      await addDoc(collection(db, path), {
-        ...msg,
-        createdAt: serverTimestamp()
-      });
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      const path = `users/${currentUser.uid}/scheduler_messages`;
+      try {
+        await addDoc(collection(db, path), {
+          ...msg,
+          createdAt: serverTimestamp()
+        });
+      } catch (error) {
+        // A chat-history write failure must not swallow the AI response or leave
+        // the student stuck with no feedback. Keep this message in the current
+        // session and explain that persistent history may be unavailable.
+        console.error('Unable to persist scheduler message:', error);
+        setSchedulerError('Your message could not be saved to chat history. You can continue this session, but check your connection and Firestore permissions.');
+        setMessages(prev => prev.some(existing => existing.id === msg.id) ? prev : [...prev, msg]);
+      }
     } else {
-      setMessages(prev => [...prev, msg]);
+      setMessages(prev => prev.some(existing => existing.id === msg.id) ? prev : [...prev, msg]);
     }
   };
 
@@ -613,6 +624,7 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
   const handleTextSyllabusSubmit = async () => {
     if (!pastedSyllabus.trim()) return;
 
+    setSchedulerError(null);
     setIsLoading(true);
     try {
       setExtractedSyllabus(pastedSyllabus);
@@ -629,6 +641,16 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
       setPastedSyllabus('');
     } catch (error) {
       console.error("Error processing text:", error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      setSchedulerError(message.includes('sign in') || message.includes('session')
+        ? 'Your sign-in session is missing or expired. Sign in again, then retry.'
+        : 'Could not process this syllabus. Check your connection, AI server configuration, and Firestore permissions, then retry.');
+      setMessages(prev => [...prev, {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: 'I could not process that syllabus. Please retry. If it keeps happening, check your sign-in session and server AI configuration.',
+        conversationId: activeConversationId
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -1308,6 +1330,14 @@ export const SmartScheduler: React.FC<{ searchQuery?: string }> = ({ searchQuery
       </div>
 
       {/* Chat Messages */}
+      {schedulerError && (
+        <div role="alert" className="mx-6 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+          <div className="flex items-start justify-between gap-3">
+            <span>{schedulerError}</span>
+            <button type="button" onClick={() => setSchedulerError(null)} className="shrink-0 underline">Dismiss</button>
+          </div>
+        </div>
+      )}
       <div 
         ref={scrollRef}
         className="flex-1 overflow-y-auto p-6 space-y-8 scroll-smooth"
