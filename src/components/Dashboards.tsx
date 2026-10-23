@@ -1486,11 +1486,6 @@ export const ParentDashboard: React.FC<{
 
   return (
     <div className="p-6 md:p-8 space-y-6 max-w-[1400px] mx-auto font-sans">
-      {isSupervisorPreview && (
-        <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-          Supervisor preview · sample student and marks shown for demonstration only. These are not real student records.
-        </div>
-      )}
       {/* Formal Header Banner with Student ID & Parent Access Key */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div className="space-y-2">
