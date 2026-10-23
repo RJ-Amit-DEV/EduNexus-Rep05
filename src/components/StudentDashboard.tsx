@@ -361,10 +361,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </p>
         </motion.div>
 
-        {/* Render real metrics when available; privileged Team Access sees labelled sample data. */}
-        {isSupervisorSample && (
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Supervisor preview · sample data, not real student records</p>
-        )}
+        {/* Render available academic metrics without a supervisor preview banner. */}
         <div className="flex flex-wrap items-center gap-3">
           {displayAcademicRecord?.cgpa !== undefined && displayAcademicRecord?.cgpa !== null && String(displayAcademicRecord.cgpa).trim() !== '' && (
             <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
