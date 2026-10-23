@@ -362,9 +362,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </motion.div>
 
         {/* Render real metrics when available; privileged Team Access sees labelled sample data. */}
-        {isSupervisorSample && (
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Supervisor preview · sample data, not real student records</p>
-        )}
         <div className="flex flex-wrap items-center gap-3">
           {displayAcademicRecord?.cgpa !== undefined && displayAcademicRecord?.cgpa !== null && String(displayAcademicRecord.cgpa).trim() !== '' && (
             <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
@@ -422,7 +419,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </div>
               {(profileData?.parentId || displayAcademicRecord?.parentId) && (
                 <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-                  {isSupervisorSample ? 'Sample only: this Parent Access ID is for the supervisor preview and cannot link a real parent account.' : <>Share this Parent Access ID with the verified parent or guardian to request access to this student's academic progress.</>}
+                  {<>Share this Parent Access ID with the verified parent or guardian to request access to this student's academic progress.</>}
                 </p>
               )}
             </div>
