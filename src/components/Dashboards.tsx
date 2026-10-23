@@ -1225,9 +1225,29 @@ export const ParentDashboard: React.FC<{
   studentId?: string;
   onSwitchParentId?: (id: string) => void;
   allowDemoLinking?: boolean;
-}> = ({ childData, activeTab = 'performance', searchQuery = '', parentName, parentId, studentId, onSwitchParentId, allowDemoLinking = false }) => {
+  isSupervisorPreview?: boolean;
+}> = ({ childData, activeTab = 'performance', searchQuery = '', parentName, parentId, studentId, onSwitchParentId, allowDemoLinking = false, isSupervisorPreview = false }) => {
   const [switchInput, setSwitchInput] = useState('');
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const supervisorSampleChild = {
+    id: 'team-sample-student-4042',
+    name: 'Aarav Sharma',
+    studentId: 'STU-4042',
+    parentId: 'PAR-4042',
+    classCode: 'CLS-DEMO-101',
+    rollNo: 'IT-042',
+    cgpa: '9.24',
+    ia1: 19,
+    ia2: 18,
+    attendance: 92,
+    quizPass: 88,
+    college: 'Institute of Engineering & Technology',
+    course: 'B.E. Information Technology',
+    batch: 'INFTT-1 · Semester 4',
+    semester: 'Semester IV (Academic Year 2025–26)'
+  };
+  const displayChild = childData || (isSupervisorPreview ? supervisorSampleChild : null);
+  
 
   const handleSwitchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1239,7 +1259,7 @@ export const ParentDashboard: React.FC<{
     }
   };
 
-  if (!childData) {
+  if (!displayChild) {
     return (
       <div className="p-10 flex flex-col items-center justify-center min-h-[60vh] text-center max-w-lg mx-auto">
         <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mb-6 text-indigo-600">
@@ -1270,8 +1290,6 @@ export const ParentDashboard: React.FC<{
     );
   }
 
-  const displayChild = childData;
-  
   // Safe access to marks
   const ia1 = displayChild.ia1 ?? 0;
   const ia2 = displayChild.ia2 ?? 0;
