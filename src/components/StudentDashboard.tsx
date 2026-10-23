@@ -49,22 +49,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 }) => {
   const getTodayString = () => new Date().toISOString().split('T')[0];
 
-  const isSupervisorSample = Boolean(profileData?.isPrivileged && !academicRecord);
-  const displayAcademicRecord = academicRecord || (isSupervisorSample ? {
-    id: 'team-sample-student-4042',
-    name: 'Aarav Sharma',
-    studentId: 'STU-4042',
-    parentId: 'PAR-4042',
-    classCode: 'CLS-DEMO-101',
-    rollNo: 'IT-042',
-    cgpa: '9.24',
-    ia1: 19,
-    ia2: 18,
-    attendance: 92,
-    quizPass: 88,
-    course: 'B.E. Information Technology',
-    batch: 'Semester 4'
-  } : null);
+  const isSupervisorSample = Boolean(profileData?.isPrivileged && profileData?.uid?.startsWith('dev-'));
+  const supervisorSampleRecord = { id: 'team-sample-student-4042', name: 'Aarav Sharma', studentId: 'STU-4042', parentId: 'PAR-4042', classCode: 'CLS-DEMO-101', rollNo: 'IT-042', cgpa: '9.24', ia1: 19, ia2: 18, attendance: 92, quizPass: 88, course: 'B.E. Information Technology', batch: 'Semester 4' };
+  const displayAcademicRecord = isSupervisorSample ? (academicRecord || supervisorSampleRecord) : academicRecord;
 
   const userDisplayName = profileData?.name?.trim() || auth.currentUser?.displayName?.trim() || 'Student';
   const userFirstName = React.useMemo(() => {
